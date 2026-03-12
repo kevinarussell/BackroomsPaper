@@ -1,5 +1,8 @@
 package dev.backrooms.backroomspaper;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -8,6 +11,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 public class BackroomsPlugin extends JavaPlugin {
 
@@ -35,8 +40,9 @@ public class BackroomsPlugin extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(new BackroomsListener(this, backroomsWorld), this);
 
-        // Ambient sound loop — plays only for players currently inside the backrooms.
         Bukkit.getScheduler().runTaskTimer(this, this::tickAmbientSounds, 100L, 280L);
+        // 300 ticks (15s) interval, 4% chance per player → avg ~6 min between messages
+        Bukkit.getScheduler().runTaskTimer(this, this::tickParanoidMessages, 600L, 300L);
 
         getLogger().info("The walls are yellow. The carpet is moist. There is no exit.");
     }
@@ -54,6 +60,46 @@ public class BackroomsPlugin extends JavaPlugin {
             p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.12f, 0.40f);
             if (Math.random() < 0.25) {
                 p.playSound(p, Sound.AMBIENT_CAVE, 0.06f, 0.55f);
+            }
+        }
+    }
+
+    // Lowercase, terse, no punctuation — just unsettling observations.
+    private static final String[] PARANOID_MESSAGES = {
+        "you haven't moved in a while",
+        "was that a footstep",
+        "the lights are getting dimmer",
+        "you've been here before",
+        "something is behind you",
+        "the hum changed",
+        "your sense of direction is unreliable",
+        "how long have you been walking",
+        "the carpet is damp here",
+        "this hallway looks familiar",
+        "you should keep moving",
+        "don't stop",
+        "the walls are closer than they were",
+        "you're going in circles",
+        "something is wrong with the lights",
+        "you can hear breathing",
+        "the exit is not in this direction",
+        "you forgot where you came from",
+        "it noticed you",
+        "there's something around the corner",
+        "you're not alone",
+        "you felt a draft",
+    };
+
+    private void tickParanoidMessages() {
+        World world = backroomsWorld.getWorld();
+        if (world == null) return;
+        var rng = ThreadLocalRandom.current();
+        for (Player p : world.getPlayers()) {
+            if (rng.nextDouble() < 0.04) {
+                String msg = PARANOID_MESSAGES[rng.nextInt(PARANOID_MESSAGES.length)];
+                p.sendMessage(Component.text(msg)
+                        .color(NamedTextColor.DARK_GRAY)
+                        .decorate(TextDecoration.ITALIC));
             }
         }
     }

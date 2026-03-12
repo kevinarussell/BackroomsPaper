@@ -65,7 +65,7 @@ public class BackroomsWorld {
         static final int FLOOR_Y = 0;
         static final int CEIL_Y  = 4;
 
-        private static final int PERIOD        = 12;
+        static final int PERIOD        = 12; // package-visible for pit teleport destination
         private static final int DOOR_WIDTH    = 4;
         private static final int DOOR_START_MAX = PERIOD - 1 - DOOR_WIDTH; // 7
 
@@ -74,6 +74,7 @@ public class BackroomsWorld {
         private static final int TYPE_COLUMN_ROW  = 2;
         private static final int TYPE_CLUTTERED   = 3;
         private static final int TYPE_PARTITION   = 4;
+        private static final int TYPE_PIT         = 5;
 
         private final int     wallOpenThreshold; // 0–256
         private final boolean escapeEnabled;
@@ -106,12 +107,27 @@ public class BackroomsWorld {
             int roomX = Math.floorDiv(wx, PERIOD);
             int roomZ = Math.floorDiv(wz, PERIOD);
 
-            // Floor — always present, even under wall doorways
-            chunk.setBlock(lx, FLOOR_Y,     lz, Material.STRIPPED_BIRCH_LOG);
-            chunk.setBlock(lx, FLOOR_Y - 1, lz, Material.BEDROCK);
-            chunk.setBlock(lx, FLOOR_Y - 2, lz, Material.BEDROCK);
+            // Pre-compute interior room role before touching the floor, because pit rooms
+            // need to suppress the floor and sub-bedrock blocks entirely.
+            boolean interior  = !wallX && !wallZ;
+            boolean isEscDoor = interior && escapeEnabled && isEscapeRoom(seed, roomX, roomZ);
+            int     typeVal   = (interior && !isEscDoor) ? roomType(seed, roomX, roomZ) : TYPE_STANDARD;
+            boolean isPit     = interior && !isEscDoor
+                                && typeVal == TYPE_PIT
+                                && tileIsPit(seed, roomX, roomZ, modX, modZ);
 
-            // Ceiling and seal
+            // Floor — pit tiles are open void; everything else gets birch log + bedrock seal
+            if (isPit) {
+                chunk.setBlock(lx, FLOOR_Y,     lz, Material.AIR);
+                chunk.setBlock(lx, FLOOR_Y - 1, lz, Material.AIR);
+                chunk.setBlock(lx, FLOOR_Y - 2, lz, Material.AIR);
+            } else {
+                chunk.setBlock(lx, FLOOR_Y,     lz, Material.STRIPPED_BIRCH_LOG);
+                chunk.setBlock(lx, FLOOR_Y - 1, lz, Material.BEDROCK);
+                chunk.setBlock(lx, FLOOR_Y - 2, lz, Material.BEDROCK);
+            }
+
+            // Ceiling — always sealed
             chunk.setBlock(lx, CEIL_Y,     lz, Material.YELLOW_CONCRETE);
             chunk.setBlock(lx, CEIL_Y + 1, lz, Material.BEDROCK);
             chunk.setBlock(lx, CEIL_Y + 2, lz, Material.BEDROCK);
@@ -136,11 +152,14 @@ public class BackroomsWorld {
                 }
 
             } else {
-                // Room interior
-                if (escapeEnabled && isEscapeRoom(seed, roomX, roomZ)) {
+                if (isPit) {
+                    for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
+                        chunk.setBlock(lx, y, lz, Material.AIR);
+                    }
+                } else if (isEscDoor) {
                     placeEscapeDoorInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
                 } else {
-                    placeRegularInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
+                    placeRegularInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, typeVal);
                 }
             }
         }
@@ -150,8 +169,8 @@ public class BackroomsWorld {
         // -------------------------------------------------------------------------
 
         private void placeRegularInterior(ChunkData chunk, int lx, int lz,
-                                          long seed, int roomX, int roomZ, int modX, int modZ) {
-            boolean isWall = switch (roomType(seed, roomX, roomZ)) {
+                                          long seed, int roomX, int roomZ, int modX, int modZ, int type) {
+            boolean isWall = switch (type) {
                 case TYPE_STANDARD   -> isStandardPillar(seed, roomX, roomZ, modX, modZ);
                 case TYPE_OPEN       -> false;
                 case TYPE_COLUMN_ROW -> isColumnRowPillar(modX, modZ);
@@ -267,16 +286,32 @@ public class BackroomsWorld {
             return 1 + (int) ((h & 0x7FFF_FFFFL) % DOOR_START_MAX);
         }
 
-        /** 50% STANDARD · 20% OPEN · 15% COLUMN_ROW · 10% CLUTTERED · 5% PARTITION */
+        /** 50% STANDARD · 18% OPEN · 12% COLUMN_ROW · 8% CLUTTERED · 5% PARTITION · 7% PIT */
         private int roomType(long worldSeed, int roomX, int roomZ) {
             long h = mix(worldSeed ^ ((long) roomX * 0x517cc1b727220a95L)
                                    ^ ((long) roomZ * 0xa09e467512804fcbL));
             int v = (int) (h & 0xFF);
             if (v < 128) return TYPE_STANDARD;
-            if (v < 179) return TYPE_OPEN;
-            if (v < 218) return TYPE_COLUMN_ROW;
-            if (v < 244) return TYPE_CLUTTERED;
-            return TYPE_PARTITION;
+            if (v < 174) return TYPE_OPEN;
+            if (v < 205) return TYPE_COLUMN_ROW;
+            if (v < 225) return TYPE_CLUTTERED;
+            if (v < 239) return TYPE_PARTITION;
+            return TYPE_PIT;
+        }
+
+        /**
+         * Irregular pit shape: a solid 4×4 core in the center of the room that is always
+         * open, plus a probabilistic fringe ring one tile wide for ragged edges.
+         * The pit never reaches modX/modZ 1–2 or 9–10, so there is always a walkable
+         * ledge around the perimeter — players see it coming before they fall in.
+         */
+        private boolean tileIsPit(long seed, int roomX, int roomZ, int modX, int modZ) {
+            if (modX >= 4 && modX <= 7 && modZ >= 4 && modZ <= 7) return true; // hard core
+            if (modX < 3 || modX > 8 || modZ < 3 || modZ > 8) return false;   // outside fringe
+            long h = mix(seed ^ ((long) roomX * 0x12345678L)
+                               ^ ((long) roomZ * 0x87654321L)
+                               ^ (modX * 5L) ^ (modZ * 7L));
+            return (h & 0xFF) < 100; // ~39% of fringe tiles extend the pit edge
         }
 
         /**
