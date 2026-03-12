@@ -1,4 +1,4 @@
-package dev.backrooms.backroomspaper;
+package io.bluewiz.backrooms;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -20,6 +20,9 @@ public class BackroomsPlugin extends JavaPlugin {
     private BackroomsWorld backroomsWorld;
     private NamespacedKey returnLocationKey;
     private NamespacedKey previousGameModeKey;
+    private boolean ambientSoundsEnabled;
+    private boolean paranoidMessagesEnabled;
+    private double  paranoidMessageChance;
 
     @Override
     public void onEnable() {
@@ -27,11 +30,17 @@ public class BackroomsPlugin extends JavaPlugin {
         returnLocationKey    = new NamespacedKey(this, "return_location");
         previousGameModeKey  = new NamespacedKey(this, "previous_gamemode");
 
-        double wallOpenChance = getConfig().getDouble("wall-open-chance", 0.70);
-        boolean escapeEnabled = getConfig().getBoolean("escape-door.enabled", true);
-        int     escapeRarity  = getConfig().getInt("escape-door.rarity", 500);
+        double  wallOpenChance       = getConfig().getDouble("wall-open-chance", 0.70);
+        boolean escapeEnabled        = getConfig().getBoolean("escape-door.enabled", true);
+        int     escapeRarity         = getConfig().getInt("escape-door.rarity", 500);
+        boolean furnitureEnabled     = getConfig().getBoolean("furniture.enabled", true);
+        double  furnitureChance      = getConfig().getDouble("furniture.chance", 0.08);
+        ambientSoundsEnabled         = getConfig().getBoolean("ambient-sounds.enabled", true);
+        paranoidMessagesEnabled      = getConfig().getBoolean("paranoid-messages.enabled", true);
+        paranoidMessageChance        = getConfig().getDouble("paranoid-messages.chance", 0.04);
 
-        backroomsWorld = new BackroomsWorld(this, wallOpenChance, escapeEnabled, escapeRarity);
+        backroomsWorld = new BackroomsWorld(this, wallOpenChance, escapeEnabled, escapeRarity,
+                furnitureEnabled, furnitureChance);
         backroomsWorld.ensureWorldExists();
 
         var cmd = getCommand("backrooms");
@@ -56,6 +65,7 @@ public class BackroomsPlugin extends JavaPlugin {
     }
 
     private void tickAmbientSounds() {
+        if (!ambientSoundsEnabled) return;
         World world = backroomsWorld.getWorld();
         if (world == null) return;
         for (Player p : world.getPlayers()) {
@@ -69,36 +79,39 @@ public class BackroomsPlugin extends JavaPlugin {
 
     // Lowercase, terse, no punctuation — just unsettling observations.
     private static final String[] PARANOID_MESSAGES = {
-        "you haven't moved in a while",
-        "was that a footstep",
+        "what was that?",
+        "was that a footstep?",
         "the lights are getting dimmer",
         "you've been here before",
         "something is behind you",
         "the hum changed",
         "your sense of direction is unreliable",
-        "how long have you been walking",
+        "how long have you been walking?",
         "the carpet is damp here",
         "this hallway looks familiar",
         "you should keep moving",
-        "don't stop",
-        "the walls are closer than they were",
+        "don't stop, something is coming",
+        "the walls are closing in...",
         "you're going in circles",
         "something is wrong with the lights",
         "you can hear breathing",
         "the exit is not in this direction",
-        "you forgot where you came from",
+        "what is this place?",
         "it noticed you",
         "there's something around the corner",
         "you're not alone",
         "you felt a draft",
+        "there's no way out",
+        "you're being watched."
     };
 
     private void tickParanoidMessages() {
+        if (!paranoidMessagesEnabled) return;
         World world = backroomsWorld.getWorld();
         if (world == null) return;
         var rng = ThreadLocalRandom.current();
         for (Player p : world.getPlayers()) {
-            if (rng.nextDouble() < 0.04) {
+            if (rng.nextDouble() < paranoidMessageChance) {
                 String msg = PARANOID_MESSAGES[rng.nextInt(PARANOID_MESSAGES.length)];
                 p.sendMessage(Component.text(msg)
                         .color(NamedTextColor.DARK_GRAY)

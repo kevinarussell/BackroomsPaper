@@ -1,4 +1,4 @@
-package dev.backrooms.backroomspaper;
+package io.bluewiz.backrooms;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -123,7 +123,7 @@ public class BackroomsListener implements Listener {
      */
     @EventHandler
     public void onPlayerFall(PlayerMoveEvent e) {
-        if (e.getTo().getY() >= BackroomsWorld.BackroomsGenerator.FLOOR_Y - 2) return;
+        if (e.getTo().getY() >= BackroomsWorld.BackroomsGenerator.FLOOR_Y - 8) return;
         Player player = e.getPlayer();
         if (!player.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
         if (!fallingPlayers.add(player.getUniqueId())) return;
@@ -143,7 +143,7 @@ public class BackroomsListener implements Listener {
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             fallingPlayers.remove(player.getUniqueId());
-            player.sendMessage(Component.text("you lost count of how far you fell")
+            player.sendMessage(Component.text("you lost track of how far you fell")
                     .color(NamedTextColor.DARK_GRAY).decorate(TextDecoration.ITALIC));
         }, 30L);
     }

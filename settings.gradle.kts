@@ -4,4 +4,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "BackroomsPaper"
+rootProject.name = "TheBackrooms"

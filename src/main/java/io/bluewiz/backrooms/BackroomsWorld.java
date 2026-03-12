@@ -1,4 +1,4 @@
-package dev.backrooms.backroomspaper;
+package io.bluewiz.backrooms;
 
 import org.bukkit.*;
 import org.bukkit.block.BlockFace;
@@ -16,27 +16,31 @@ public class BackroomsWorld {
     public static final String WORLD_NAME = "backrooms";
 
     private final BackroomsPlugin plugin;
-    private final double wallOpenChance;
+    private final double  wallOpenChance;
     private final boolean escapeEnabled;
-    private final int escapeRarity;
+    private final int     escapeRarity;
+    private final boolean furnitureEnabled;
+    private final double  furnitureChance;
     private World world;
 
-    public BackroomsWorld(BackroomsPlugin plugin, double wallOpenChance, boolean escapeEnabled, int escapeRarity) {
-        this.plugin        = plugin;
-        this.wallOpenChance = wallOpenChance;
-        this.escapeEnabled  = escapeEnabled;
-        this.escapeRarity   = escapeRarity;
+    public BackroomsWorld(BackroomsPlugin plugin, double wallOpenChance, boolean escapeEnabled,
+                          int escapeRarity, boolean furnitureEnabled, double furnitureChance) {
+        this.plugin           = plugin;
+        this.wallOpenChance   = wallOpenChance;
+        this.escapeEnabled    = escapeEnabled;
+        this.escapeRarity     = escapeRarity;
+        this.furnitureEnabled = furnitureEnabled;
+        this.furnitureChance  = furnitureChance;
     }
 
     public void ensureWorldExists() {
         world = Bukkit.getWorld(WORLD_NAME);
         if (world != null) return;
 
-        // THE_END environment renders a black void sky with no sun or celestial objects.
-        // This means pits look into darkness rather than a bright blue sky.
         WorldCreator creator = new WorldCreator(WORLD_NAME)
-                .environment(World.Environment.THE_END)
-                .generator(new BackroomsGenerator(wallOpenChance, escapeEnabled, escapeRarity))
+                .environment(World.Environment.NORMAL)
+                .generator(new BackroomsGenerator(wallOpenChance, escapeEnabled, escapeRarity,
+                        furnitureEnabled, furnitureChance))
                 .generateStructures(false);
 
         world = creator.createWorld();
@@ -65,8 +69,11 @@ public class BackroomsWorld {
 
     public static class BackroomsGenerator extends ChunkGenerator {
 
-        static final int FLOOR_Y = 0;
-        static final int CEIL_Y  = 4;
+        static final int FLOOR_Y = 64;
+        static final int CEIL_Y  = FLOOR_Y + 4;  // 68
+
+        private static final int PIT_DEPTH = 16; // shaft depth; air from FLOOR_Y down to FLOOR_Y-PIT_DEPTH+1
+        private static final int SUB_FILL  = 6;  // smooth stone below pit floor before bedrock seal
 
         static final int PERIOD        = 12; // package-visible for pit teleport destination
         private static final int DOOR_WIDTH    = 4;
@@ -79,14 +86,19 @@ public class BackroomsWorld {
         private static final int TYPE_PARTITION   = 4;
         private static final int TYPE_PIT         = 5;
 
-        private final int     wallOpenThreshold; // 0–256
+        private final int     wallOpenThreshold;  // 0–256
         private final boolean escapeEnabled;
         private final int     escapeRarity;
+        private final boolean furnitureEnabled;
+        private final int     furnitureThreshold; // 0–256
 
-        public BackroomsGenerator(double wallOpenChance, boolean escapeEnabled, int escapeRarity) {
-            this.wallOpenThreshold = (int) (wallOpenChance * 256);
-            this.escapeEnabled     = escapeEnabled;
-            this.escapeRarity      = Math.max(1, escapeRarity);
+        public BackroomsGenerator(double wallOpenChance, boolean escapeEnabled, int escapeRarity,
+                                  boolean furnitureEnabled, double furnitureChance) {
+            this.wallOpenThreshold  = (int) (wallOpenChance * 256);
+            this.escapeEnabled      = escapeEnabled;
+            this.escapeRarity       = Math.max(1, escapeRarity);
+            this.furnitureEnabled   = furnitureEnabled;
+            this.furnitureThreshold = (int) (furnitureChance * 256);
         }
 
         @Override
@@ -111,24 +123,40 @@ public class BackroomsWorld {
             int roomZ = Math.floorDiv(wz, PERIOD);
 
             // Pre-compute interior room role before touching the floor, because pit rooms
-            // need to suppress the floor and sub-bedrock blocks entirely.
+            // need to suppress the floor tile and carve an air shaft below.
             boolean interior  = !wallX && !wallZ;
             boolean isEscDoor = interior && escapeEnabled && isEscapeRoom(seed, roomX, roomZ);
             int     typeVal   = (interior && !isEscDoor) ? roomType(seed, roomX, roomZ) : TYPE_STANDARD;
-            boolean isPit     = interior && !isEscDoor
-                                && typeVal == TYPE_PIT
-                                && tileIsPit(seed, roomX, roomZ, modX, modZ);
+            boolean inPitRoom = interior && !isEscDoor && typeVal == TYPE_PIT;
+            boolean isPit     = inPitRoom && tileIsPit(seed, roomX, roomZ, modX, modZ);
 
-            // Floor — pit tiles are open void; everything else gets birch log + bedrock seal
+            int pitBottomY  = FLOOR_Y - PIT_DEPTH;     // 48 — black concrete floor of shaft
+            int subFloorEnd = pitBottomY - SUB_FILL;   // 42 — bedrock seal layer
+
+            // Floor tile
+            chunk.setBlock(lx, FLOOR_Y, lz, isPit ? Material.AIR : Material.STRIPPED_BIRCH_LOG);
+
+            // Sub-floor shaft/fill
             if (isPit) {
-                chunk.setBlock(lx, FLOOR_Y,     lz, Material.AIR);
-                chunk.setBlock(lx, FLOOR_Y - 1, lz, Material.AIR);
-                chunk.setBlock(lx, FLOOR_Y - 2, lz, Material.AIR);
+                // Open air shaft
+                for (int y = FLOOR_Y - 1; y > pitBottomY; y--) {
+                    chunk.setBlock(lx, y, lz, Material.AIR);
+                }
+                chunk.setBlock(lx, pitBottomY, lz, Material.BLACK_CONCRETE);
             } else {
-                chunk.setBlock(lx, FLOOR_Y,     lz, Material.STRIPPED_BIRCH_LOG);
-                chunk.setBlock(lx, FLOOR_Y - 1, lz, Material.BEDROCK);
-                chunk.setBlock(lx, FLOOR_Y - 2, lz, Material.BEDROCK);
+                // Pit rooms: bamboo planks for shaft depth so walls look yellow when peering down.
+                // All other columns: smooth stone fill.
+                Material subMat = inPitRoom ? Material.BAMBOO_PLANKS : Material.SMOOTH_STONE;
+                for (int y = FLOOR_Y - 1; y >= pitBottomY; y--) {
+                    chunk.setBlock(lx, y, lz, subMat);
+                }
             }
+
+            // Stone seal and bedrock below the pit level — same for every column
+            for (int y = pitBottomY - 1; y > subFloorEnd; y--) {
+                chunk.setBlock(lx, y, lz, Material.SMOOTH_STONE);
+            }
+            chunk.setBlock(lx, subFloorEnd, lz, Material.BEDROCK);
 
             // Ceiling — always sealed
             chunk.setBlock(lx, CEIL_Y,     lz, Material.YELLOW_CONCRETE);
@@ -211,10 +239,10 @@ public class BackroomsWorld {
             Material.POTTED_WITHER_ROSE,
         };
 
-        /** ~15% of rooms contain a piece of furniture. */
         private boolean hasFurniture(long seed, int roomX, int roomZ) {
+            if (!furnitureEnabled) return false;
             long h = mix(seed ^ ((long) roomX * 0xFEDCBA9876L) ^ ((long) roomZ * 0x123456789L));
-            return (h & 0xFF) < 38;
+            return (h & 0xFF) < furnitureThreshold;
         }
 
         private int furnitureType(long seed, int roomX, int roomZ) {

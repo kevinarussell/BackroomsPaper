@@ -1,4 +1,4 @@
-package dev.backrooms.backroomspaper;
+package io.bluewiz.backrooms;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;

@@ -8,3 +8,20 @@ escape-door:
   # One escape door appears on average every <rarity> rooms.
   # Higher = rarer. Default 500 means roughly one door per very large area of exploration.
   rarity: 500
+
+furniture:
+  # Set to false to disable all furniture (plant stands, sofas, desks, cabinets).
+  enabled: true
+  # Fraction of rooms that contain a piece of furniture (0.0–1.0).
+  chance: 0.08
+
+ambient-sounds:
+  # Set to false to disable the ambient hum and cave sounds.
+  enabled: true
+
+paranoid-messages:
+  # Set to false to disable the occasional unsettling chat messages.
+  enabled: true
+  # Probability per player per ~15 seconds of receiving a message (0.0–1.0).
+  # Default 0.04 averages roughly one message every 6 minutes.
+  chance: 0.04
