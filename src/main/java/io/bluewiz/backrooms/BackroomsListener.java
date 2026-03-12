@@ -4,10 +4,18 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.Title;
+import org.bukkit.Art;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.Sign;
+import org.bukkit.block.data.type.WallSign;
+import org.bukkit.block.sign.Side;
+import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.event.EventHandler;
@@ -17,6 +25,7 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -37,6 +46,164 @@ public class BackroomsListener implements Listener {
         this.plugin         = plugin;
         this.backroomsWorld = backroomsWorld;
     }
+
+    // -------------------------------------------------------------------------
+    // World decoration — fires once per chunk on first generation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Each room's (modX=1, modZ=1) block falls in exactly one chunk, so this
+     * handler processes every room precisely once when its chunk is first generated.
+     */
+    @EventHandler
+    public void onChunkLoad(ChunkLoadEvent e) {
+        if (!e.isNewChunk()) return;
+        if (!e.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
+
+        World world   = e.getWorld();
+        long  seed    = world.getSeed();
+        int   period  = BackroomsWorld.BackroomsGenerator.PERIOD;
+        int   baseX   = e.getChunk().getX() * 16;
+        int   baseZ   = e.getChunk().getZ() * 16;
+
+        for (int lx = 0; lx < 16; lx++) {
+            for (int lz = 0; lz < 16; lz++) {
+                int wx = baseX + lx;
+                int wz = baseZ + lz;
+                if (Math.floorMod(wx, period) != 1) continue;
+                if (Math.floorMod(wz, period) != 1) continue;
+                decorateRoom(world, seed, Math.floorDiv(wx, period), Math.floorDiv(wz, period));
+            }
+        }
+    }
+
+    /**
+     * Paintings (~12%) and signs (~5%) placed on the interior face of the west
+     * or north wall. Both are placed at modX=1 / modZ=1 so the bamboo wall
+     * behind them is always solid — a block closer to the room boundary would
+     * risk having open air behind it.
+     */
+    private void decorateRoom(World world, long seed, int roomX, int roomZ) {
+        int period = BackroomsWorld.BackroomsGenerator.PERIOD;
+        int floorY = BackroomsWorld.BackroomsGenerator.FLOOR_Y;
+
+        // ---- Painting -------------------------------------------------------
+        long ph = mix(seed ^ ((long) roomX * 0xf1357aea2e62a9c5L)
+                           ^ ((long) roomZ * 0x9e3779b97f4a7c15L)
+                           ^ 0x7a6c3b2d1e0f5a4bL);
+        if ((ph & 0xFF) < 31) { // ~12%
+            boolean northWall = (ph & 0x100) != 0;
+            int     pos       = 2 + (int) ((ph >>> 9)  % 8); // 2–9 along wall
+            Art     art       = PAINTING_ARTS[(int) ((ph >>> 17) % PAINTING_ARTS.length)];
+
+            // Entity placed one block INTO the room; backing block = bamboo wall
+            int px = northWall ? roomX * period + pos : roomX * period + 1;
+            int pz = northWall ? roomZ * period + 1   : roomZ * period + pos;
+            BlockFace face = northWall ? BlockFace.SOUTH : BlockFace.EAST;
+
+            Block backing = world.getBlockAt(
+                    northWall ? px : px - 1,
+                    floorY + 2,
+                    northWall ? pz - 1 : pz);
+            if (backing.getType() == Material.BAMBOO_PLANKS) {
+                try {
+                    Location loc = new Location(world, px, floorY + 2, pz);
+                    world.spawn(loc, Painting.class, p -> {
+                        p.setFacingDirection(face);
+                        p.setArt(art);
+                    });
+                } catch (Exception ignored) {} // wrong size for available space, etc.
+            }
+        }
+
+        // ---- Sign -----------------------------------------------------------
+        long sh = mix(seed ^ ((long) roomX * 0x6c62272e07bb0142L)
+                           ^ ((long) roomZ * 0xbf58476d1ce4e5b9L)
+                           ^ 0x3a1b2c4d5e6f7890L);
+        if ((sh & 0xFF) < 13) { // ~5%
+            boolean northWall = (sh & 0x100) != 0;
+            int     pos       = 2 + (int) ((sh >>> 9)  % 8);
+            String[] lines    = SIGN_CONFIGS[(int) ((sh >>> 17) % SIGN_CONFIGS.length)];
+
+            int sx = northWall ? roomX * period + pos : roomX * period + 1;
+            int sz = northWall ? roomZ * period + 1   : roomZ * period + pos;
+            BlockFace face = northWall ? BlockFace.SOUTH : BlockFace.EAST;
+
+            Block signBlock = world.getBlockAt(sx, floorY + 2, sz);
+            if (signBlock.getType() == Material.AIR) {
+                WallSign data = (WallSign) Bukkit.createBlockData(Material.OAK_WALL_SIGN);
+                data.setFacing(face);
+                signBlock.setBlockData(data);
+                Sign sign = (Sign) signBlock.getState();
+                for (int i = 0; i < 4; i++) {
+                    sign.getSide(Side.FRONT).line(i, Component.text(lines[i]));
+                }
+                sign.update();
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Decoration data
+    // -------------------------------------------------------------------------
+
+    /**
+     * All 1×1 classic paintings — guaranteed to fit in a single wall block and
+     * present in every version since early Java Edition. They read as generic
+     * "office art": abstract shapes, muted landscapes, something slightly wrong
+     * about each of them.
+     */
+    private static final Art[] PAINTING_ARTS = {
+        Art.KEBAB, Art.AZTEC, Art.ALBAN, Art.AZTEC2,
+        Art.BOMB, Art.PLANT, Art.WASTELAND,
+    };
+
+    /**
+     * Kane Pixels-style signage: mostly arrows suggesting navigation that leads
+     * nowhere, terse room codes, the occasional fragment of instruction. Lines
+     * are short and sparse — the signs look functional but are no help at all.
+     */
+    private static final String[][] SIGN_CONFIGS = {
+        // Arrow-heavy
+        {"→",      "",        "", ""},
+        {"↑",      "",        "", ""},
+        {"←",      "",        "", ""},
+        {"↓",      "",        "", ""},
+        {"→ →",    "",        "", ""},
+        {"↑",      "B3",      "", ""},
+        {"LVL 0",  "",        "↓",""},
+        {"←",      "EXIT",    "", ""},
+        {"→",      "114",     "", ""},
+        {"↑  ↓",   "",        "", ""},  // contradictory
+        {"← B",    "→ A",     "", ""},
+        {"→",      "→",       "→",""},  // insistent
+        {"↑",      "3F",      "", ""},
+        // Sparse text / codes
+        {"?",      "",        "", ""},
+        {"",       "",        "", ""},  // worn blank
+        {"STAFF",  "ONLY",    "→",""},
+        {"NO EXIT","",        "", ""},
+        {"SECTION","4-A",     "", ""},
+        {"WRONG",  "WAY",     "", ""},
+        // Rare unsettling fragments
+        {"FOLLOW", "THE HUM", "", ""},
+        {"LEVEL 0","",        "", ""},
+    };
+
+    // -------------------------------------------------------------------------
+
+    private static long mix(long h) {
+        h ^= h >>> 30;
+        h *= 0xbf58476d1ce4e5b9L;
+        h ^= h >>> 27;
+        h *= 0x94d049bb133111ebL;
+        h ^= h >>> 31;
+        return h;
+    }
+
+    // -------------------------------------------------------------------------
+    // Event handlers
+    // -------------------------------------------------------------------------
 
     /**
      * Cancel all natural mob spawning in the backrooms.
@@ -115,9 +282,10 @@ public class BackroomsListener implements Listener {
     }
 
     /**
-     * Pit detection — fires when a player crosses below FLOOR_Y-2, meaning they have
-     * fallen into a pit room opening. Teleports them to the safe corner (modX=2, modZ=2)
-     * of a random room; that position is guaranteed clear in every room type.
+     * Pit detection — fires when a player crosses below FLOOR_Y-8, giving a
+     * meaningful fall before the teleport kicks in. Teleports them to the safe
+     * corner (modX=2, modZ=2) of a random room; that position is guaranteed
+     * clear in every room type.
      *
      * The Y check is first so the vast majority of PlayerMoveEvent calls exit immediately.
      */

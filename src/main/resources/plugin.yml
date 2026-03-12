@@ -1,9 +1,9 @@
-name: BackroomsPaper
+name: TheBackrooms
 version: 1.0.0
 main: io.bluewiz.backrooms.BackroomsPlugin
 api-version: "1.21.11"
 description: "No-clip out of reality. No escape."
-authors: [kevin]
+authors: [bluewiz_360]
 
 commands:
   backrooms:

@@ -75,9 +75,7 @@ public class BackroomsWorld {
         private static final int PIT_DEPTH = 16; // shaft depth; air from FLOOR_Y down to FLOOR_Y-PIT_DEPTH+1
         private static final int SUB_FILL  = 6;  // smooth stone below pit floor before bedrock seal
 
-        static final int PERIOD        = 12; // package-visible for pit teleport destination
-        private static final int DOOR_WIDTH    = 4;
-        private static final int DOOR_START_MAX = PERIOD - 1 - DOOR_WIDTH; // 7
+        static final int PERIOD = 12; // package-visible for pit teleport destination
 
         private static final int TYPE_STANDARD    = 0;
         private static final int TYPE_OPEN        = 1;
@@ -167,17 +165,21 @@ public class BackroomsWorld {
                 solidWall(chunk, lx, lz);
 
             } else if (wallX) {
-                int doorStart = doorwayStart(seed, roomX, roomZ, 0);
-                if (isWallOpen(seed, roomX, roomZ, 0) && modZ >= doorStart && modZ < doorStart + DOOR_WIDTH) {
-                    openPassage(chunk, lx, lz);
+                int width     = doorWidth(seed, roomX, roomZ, 0);
+                int height    = doorHeight(seed, roomX, roomZ, 0);
+                int doorStart = doorwayStart(seed, roomX, roomZ, 0, width);
+                if (isWallOpen(seed, roomX, roomZ, 0) && modZ >= doorStart && modZ < doorStart + width) {
+                    openPassage(chunk, lx, lz, height);
                 } else {
                     solidWall(chunk, lx, lz);
                 }
 
             } else if (wallZ) {
-                int doorStart = doorwayStart(seed, roomX, roomZ, 1);
-                if (isWallOpen(seed, roomX, roomZ, 1) && modX >= doorStart && modX < doorStart + DOOR_WIDTH) {
-                    openPassage(chunk, lx, lz);
+                int width     = doorWidth(seed, roomX, roomZ, 1);
+                int height    = doorHeight(seed, roomX, roomZ, 1);
+                int doorStart = doorwayStart(seed, roomX, roomZ, 1, width);
+                if (isWallOpen(seed, roomX, roomZ, 1) && modX >= doorStart && modX < doorStart + width) {
+                    openPassage(chunk, lx, lz, height);
                 } else {
                     solidWall(chunk, lx, lz);
                 }
@@ -384,10 +386,10 @@ public class BackroomsWorld {
             }
         }
 
-        /** Preserves the floor block — only clears the air above it. */
-        private void openPassage(ChunkData chunk, int lx, int lz) {
+        /** Clears the passage opening and fills any remaining height with bamboo (low header). */
+        private void openPassage(ChunkData chunk, int lx, int lz, int height) {
             for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
-                chunk.setBlock(lx, y, lz, Material.AIR);
+                chunk.setBlock(lx, y, lz, y < FLOOR_Y + 1 + height ? Material.AIR : Material.BAMBOO_PLANKS);
             }
         }
 
@@ -406,11 +408,32 @@ public class BackroomsWorld {
             return (h & 0xFF) < wallOpenThreshold;
         }
 
-        private int doorwayStart(long worldSeed, int roomX, int roomZ, int dir) {
+        private int doorwayStart(long worldSeed, int roomX, int roomZ, int dir, int width) {
             long h = mix(worldSeed ^ ((long) roomX * 0x6c62272e07bb0142L)
                                    ^ ((long) roomZ * 0x9e3779b97f4a7c15L)
                                    ^ ((long) dir   * 0xa09e467512804fcbL));
-            return 1 + (int) ((h & 0x7FFF_FFFFL) % DOOR_START_MAX);
+            // Valid start range: 1 .. (PERIOD-1-width), so the door fits within mod 1..PERIOD-2
+            return 1 + (int) ((h & 0x7FFF_FFFFL) % (PERIOD - 1 - width));
+        }
+
+        /** Width in blocks: 2–5, weighted toward 3–4. */
+        private int doorWidth(long worldSeed, int roomX, int roomZ, int dir) {
+            long h = mix(worldSeed ^ ((long) roomX * 0x1a36e2b6c4d5f789L)
+                                   ^ ((long) roomZ * 0x8f7e6d5c4b3a2190L)
+                                   ^ ((long) dir   * 0xc3d4e5f6a7b8c9d0L));
+            int v = (int) (h & 0xFF);
+            if (v < 51)  return 2; // ~20%
+            if (v < 153) return 3; // ~40%
+            if (v < 230) return 4; // ~30%
+            return 5;              // ~10%
+        }
+
+        /** Height in blocks: 2 (low header) or 3 (full). */
+        private int doorHeight(long worldSeed, int roomX, int roomZ, int dir) {
+            long h = mix(worldSeed ^ ((long) roomX * 0x2b3c4d5e6f7a8b9cL)
+                                   ^ ((long) roomZ * 0x9a8b7c6d5e4f3021L)
+                                   ^ ((long) dir   * 0xf1e2d3c4b5a69788L));
+            return (h & 0xFF) < 90 ? 2 : 3; // ~35% low header, ~65% full height
         }
 
         /** 50% STANDARD · 18% OPEN · 12% COLUMN_ROW · 8% CLUTTERED · 5% PARTITION · 7% PIT */
