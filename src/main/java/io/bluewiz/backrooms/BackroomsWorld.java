@@ -190,9 +190,9 @@ public class BackroomsWorld {
                         chunk.setBlock(lx, y, lz, Material.AIR);
                     }
                 } else if (isEscDoor) {
-                    placeEscapeDoorInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
+                    placeEscapeDoorInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, lightMaterial(seed, roomX, roomZ));
                 } else {
-                    placeRegularInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, typeVal);
+                    placeRegularInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, typeVal, lightMaterial(seed, roomX, roomZ));
                 }
             }
         }
@@ -202,7 +202,8 @@ public class BackroomsWorld {
         // -------------------------------------------------------------------------
 
         private void placeRegularInterior(ChunkData chunk, int lx, int lz,
-                                          long seed, int roomX, int roomZ, int modX, int modZ, int type) {
+                                          long seed, int roomX, int roomZ, int modX, int modZ, int type,
+                                          Material light) {
             boolean isWall = switch (type) {
                 case TYPE_STANDARD   -> isStandardPillar(seed, roomX, roomZ, modX, modZ);
                 case TYPE_OPEN       -> false;
@@ -216,7 +217,7 @@ public class BackroomsWorld {
                 solidWall(chunk, lx, lz);
             } else {
                 if (isLightTile(modX, modZ)) {
-                    chunk.setBlock(lx, CEIL_Y, lz, Material.OCHRE_FROGLIGHT);
+                    chunk.setBlock(lx, CEIL_Y, lz, light);
                 }
                 for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
                     chunk.setBlock(lx, y, lz, Material.AIR);
@@ -334,7 +335,8 @@ public class BackroomsWorld {
          * immediately, wrongly visible from across the room.
          */
         private void placeEscapeDoorInterior(ChunkData chunk, int lx, int lz,
-                                              long seed, int roomX, int roomZ, int modX, int modZ) {
+                                              long seed, int roomX, int roomZ, int modX, int modZ,
+                                              Material light) {
             int doorX = escapeDoorX(seed, roomX, roomZ);
             int doorZ = escapeDoorZ(seed, roomX, roomZ);
 
@@ -369,7 +371,7 @@ public class BackroomsWorld {
 
             // All other interior positions — open air, normal lights
             if (isLightTile(modX, modZ)) {
-                chunk.setBlock(lx, CEIL_Y, lz, Material.OCHRE_FROGLIGHT);
+                chunk.setBlock(lx, CEIL_Y, lz, light);
             }
             for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
                 chunk.setBlock(lx, y, lz, Material.AIR);
@@ -396,6 +398,13 @@ public class BackroomsWorld {
         // -------------------------------------------------------------------------
         // Layout helpers
         // -------------------------------------------------------------------------
+
+        /** ~3% of rooms have green froglights instead of ochre — a bad sign. */
+        private Material lightMaterial(long worldSeed, int roomX, int roomZ) {
+            long h = mix(worldSeed ^ ((long) roomX * 0xe7037ed1a0b428dbL)
+                                   ^ ((long) roomZ * 0x4cd6865f4874e52bL));
+            return (h & 0xFF) < 8 ? Material.VERDANT_FROGLIGHT : Material.OCHRE_FROGLIGHT;
+        }
 
         private boolean isLightTile(int modX, int modZ) {
             return (modX == 5 || modX == 6) && (modZ == 5 || modZ == 6);
