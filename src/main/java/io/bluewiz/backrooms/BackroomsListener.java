@@ -25,6 +25,7 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -129,8 +130,12 @@ public class BackroomsListener implements Listener {
             int sz = northWall ? roomZ * period + 1   : roomZ * period + pos;
             BlockFace face = northWall ? BlockFace.SOUTH : BlockFace.EAST;
 
-            Block signBlock = world.getBlockAt(sx, floorY + 2, sz);
-            if (signBlock.getType() == Material.AIR) {
+            Block signBlock   = world.getBlockAt(sx, floorY + 2, sz);
+            Block signBacking = northWall
+                    ? world.getBlockAt(sx, floorY + 2, sz - 1)
+                    : world.getBlockAt(sx - 1, floorY + 2, sz);
+            if (signBlock.getType() == Material.AIR
+                    && signBacking.getType() == Material.BAMBOO_PLANKS) {
                 WallSign data = (WallSign) Bukkit.createBlockData(Material.OAK_WALL_SIGN);
                 data.setFacing(face);
                 signBlock.setBlockData(data);
@@ -204,6 +209,14 @@ public class BackroomsListener implements Listener {
     // -------------------------------------------------------------------------
     // Event handlers
     // -------------------------------------------------------------------------
+
+    /** Prevent horn coral from drying out — it has no water but should stay alive. */
+    @EventHandler
+    public void onBlockFade(BlockFadeEvent e) {
+        if (e.getBlock().getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) {
+            e.setCancelled(true);
+        }
+    }
 
     /**
      * Cancel all natural mob spawning in the backrooms.

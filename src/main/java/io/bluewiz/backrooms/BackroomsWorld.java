@@ -132,7 +132,7 @@ public class BackroomsWorld {
             int subFloorEnd = pitBottomY - SUB_FILL;   // 42 — bedrock seal layer
 
             // Floor tile
-            chunk.setBlock(lx, FLOOR_Y, lz, isPit ? Material.AIR : Material.STRIPPED_BIRCH_LOG);
+            chunk.setBlock(lx, FLOOR_Y, lz, isPit ? Material.AIR : Material.HORN_CORAL_BLOCK);
 
             // Sub-floor shaft/fill
             if (isPit) {
