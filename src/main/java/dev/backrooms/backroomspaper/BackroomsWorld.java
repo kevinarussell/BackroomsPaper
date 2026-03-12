@@ -30,9 +30,10 @@ public class BackroomsWorld {
         world = Bukkit.getWorld(WORLD_NAME);
         if (world != null) return;
 
+        // THE_END environment renders a black void sky with no sun or celestial objects.
+        // This means pits look into darkness rather than a bright blue sky.
         WorldCreator creator = new WorldCreator(WORLD_NAME)
-                .environment(World.Environment.NORMAL)
-                .type(WorldType.FLAT)
+                .environment(World.Environment.THE_END)
                 .generator(new BackroomsGenerator(wallOpenChance, escapeEnabled, escapeRarity))
                 .generateStructures(false);
 
