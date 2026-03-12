@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -18,11 +19,13 @@ public class BackroomsPlugin extends JavaPlugin {
 
     private BackroomsWorld backroomsWorld;
     private NamespacedKey returnLocationKey;
+    private NamespacedKey previousGameModeKey;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        returnLocationKey = new NamespacedKey(this, "return_location");
+        returnLocationKey    = new NamespacedKey(this, "return_location");
+        previousGameModeKey  = new NamespacedKey(this, "previous_gamemode");
 
         double wallOpenChance = getConfig().getDouble("wall-open-chance", 0.70);
         boolean escapeEnabled = getConfig().getBoolean("escape-door.enabled", true);
@@ -106,6 +109,24 @@ public class BackroomsPlugin extends JavaPlugin {
 
     public BackroomsWorld getBackroomsWorld() {
         return backroomsWorld;
+    }
+
+    /** Saves the player's current gamemode before sending them to the backrooms. */
+    public void saveGameMode(Player player) {
+        player.getPersistentDataContainer().set(
+                previousGameModeKey, PersistentDataType.STRING, player.getGameMode().name());
+    }
+
+    /** Restores the saved gamemode, falling back to SURVIVAL if missing. */
+    public void restoreGameMode(Player player) {
+        var pdc = player.getPersistentDataContainer();
+        String saved = pdc.get(previousGameModeKey, PersistentDataType.STRING);
+        pdc.remove(previousGameModeKey);
+        GameMode mode = GameMode.SURVIVAL;
+        if (saved != null) {
+            try { mode = GameMode.valueOf(saved); } catch (IllegalArgumentException ignored) {}
+        }
+        player.setGameMode(mode);
     }
 
     /**

@@ -58,8 +58,13 @@ public class BackroomsListener implements Listener {
         Player player = e.getPlayer();
         if (player.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) {
             e.setRespawnLocation(backroomsWorld.getSpawnLocation());
-            player.sendMessage(Component.text("You thought death would save you.")
-                    .color(NamedTextColor.DARK_GRAY).decorate(TextDecoration.ITALIC));
+            // Gamemode is reset by the server after this event fires, so enforce
+            // ADVENTURE one tick later once the player is fully respawned.
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                player.setGameMode(org.bukkit.GameMode.ADVENTURE);
+                player.sendMessage(Component.text("You thought death would save you.")
+                        .color(NamedTextColor.DARK_GRAY).decorate(TextDecoration.ITALIC));
+            }, 1L);
         }
     }
 
@@ -97,6 +102,7 @@ public class BackroomsListener implements Listener {
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             player.teleport(returnLocation);
+            plugin.restoreGameMode(player);
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 player.sendMessage(Component.empty());
                 player.sendMessage(Component.text("The hum fades. You remember what silence sounds like.")

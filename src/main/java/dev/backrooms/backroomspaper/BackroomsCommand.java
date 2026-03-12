@@ -72,6 +72,7 @@ public class BackroomsCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        plugin.saveGameMode(target);
         plugin.saveReturnLocation(target);
         target.teleport(backroomsWorld.getSpawnLocation());
 
@@ -85,6 +86,7 @@ public class BackroomsCommand implements CommandExecutor, TabCompleter {
         // Title fires after the world-load screen clears.
         // Chat messages during cross-world teleport are silently dropped by the client.
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            target.setGameMode(org.bukkit.GameMode.ADVENTURE);
             target.showTitle(Title.title(
                     Component.text("YOU HAVE NO-CLIPPED")
                             .color(NamedTextColor.YELLOW)

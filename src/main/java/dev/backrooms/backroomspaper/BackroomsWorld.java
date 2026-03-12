@@ -4,6 +4,8 @@ import org.bukkit.*;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.type.Door;
+import org.bukkit.block.data.type.Slab;
+import org.bukkit.block.data.type.Stairs;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.WorldInfo;
 
@@ -189,7 +191,103 @@ public class BackroomsWorld {
                 for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
                     chunk.setBlock(lx, y, lz, Material.AIR);
                 }
+                placeFurnitureAt(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
             }
+        }
+
+        // -------------------------------------------------------------------------
+        // Furniture
+        // -------------------------------------------------------------------------
+
+        private static final int FURN_PLANT_STAND = 0; // fence pedestal + potted plant
+        private static final int FURN_SOFA        = 1; // row of oak stairs
+        private static final int FURN_DESK        = 2; // fence legs + dark oak slab surface
+        private static final int FURN_CABINET     = 3; // stacked chiseled bookshelves
+
+        private static final Material[] POTTED_PLANTS = {
+            Material.POTTED_FERN,
+            Material.POTTED_DEAD_BUSH,
+            Material.POTTED_OAK_SAPLING,
+            Material.POTTED_WITHER_ROSE,
+        };
+
+        /** ~15% of rooms contain a piece of furniture. */
+        private boolean hasFurniture(long seed, int roomX, int roomZ) {
+            long h = mix(seed ^ ((long) roomX * 0xFEDCBA9876L) ^ ((long) roomZ * 0x123456789L));
+            return (h & 0xFF) < 38;
+        }
+
+        private int furnitureType(long seed, int roomX, int roomZ) {
+            long h = mix(seed ^ ((long) roomX * 0xABCDEF01L) ^ ((long) roomZ * 0x12345678L) ^ 99L);
+            return (int) ((h & 0xFF) % 4);
+        }
+
+        /**
+         * Anchor position within the room interior (modX/modZ 3–7) so that 3-wide
+         * furniture pieces (anchor ± 1) never breach the perimeter.
+         */
+        private int furnitureAnchorX(long seed, int roomX, int roomZ) {
+            long h = mix(seed ^ ((long) roomX * 0x11111L) ^ ((long) roomZ * 0x22222L) ^ 1L);
+            return 3 + (int) ((h & 0x7FFF_FFFFL) % 5); // 3–7
+        }
+
+        private int furnitureAnchorZ(long seed, int roomX, int roomZ) {
+            long h = mix(seed ^ ((long) roomX * 0x33333L) ^ ((long) roomZ * 0x44444L) ^ 2L);
+            return 3 + (int) ((h & 0x7FFF_FFFFL) % 5); // 3–7
+        }
+
+        private void placeFurnitureAt(ChunkData chunk, int lx, int lz,
+                                      long seed, int roomX, int roomZ, int modX, int modZ) {
+            if (!hasFurniture(seed, roomX, roomZ)) return;
+            int type = furnitureType(seed, roomX, roomZ);
+            int ax   = furnitureAnchorX(seed, roomX, roomZ);
+            int az   = furnitureAnchorZ(seed, roomX, roomZ);
+            int dx   = modX - ax;
+            int dz   = modZ - az;
+
+            switch (type) {
+                case FURN_PLANT_STAND -> placePlantStand(chunk, lx, lz, seed, roomX, roomZ, dx, dz);
+                case FURN_SOFA        -> placeSofa(chunk, lx, lz, seed, roomX, roomZ, dx, dz);
+                case FURN_DESK        -> placeDesk(chunk, lx, lz, dx, dz);
+                case FURN_CABINET     -> placeCabinet(chunk, lx, lz, dx, dz);
+            }
+        }
+
+        /** Oak fence pedestal with a potted plant on top. */
+        private void placePlantStand(ChunkData chunk, int lx, int lz,
+                                     long seed, int roomX, int roomZ, int dx, int dz) {
+            if (dx != 0 || dz != 0) return;
+            chunk.setBlock(lx, FLOOR_Y + 1, lz, Material.OAK_FENCE);
+            long h = mix(seed ^ ((long) roomX * 0x55555L) ^ ((long) roomZ * 0x66666L));
+            chunk.setBlock(lx, FLOOR_Y + 2, lz, POTTED_PLANTS[(int) ((h & 0xFF) % POTTED_PLANTS.length)]);
+        }
+
+        /** Three oak stair blocks in a row — a recognisable couch silhouette. */
+        private void placeSofa(ChunkData chunk, int lx, int lz,
+                                long seed, int roomX, int roomZ, int dx, int dz) {
+            if (dz != 0 || dx < -1 || dx > 1) return;
+            long h = mix(seed ^ ((long) roomX * 0x77777L) ^ ((long) roomZ * 0x88888L));
+            Stairs stairs = (Stairs) Bukkit.createBlockData(Material.OAK_STAIRS);
+            stairs.setFacing((h & 1) == 0 ? BlockFace.NORTH : BlockFace.SOUTH);
+            stairs.setHalf(Bisected.Half.BOTTOM);
+            stairs.setShape(Stairs.Shape.STRAIGHT);
+            chunk.setBlock(lx, FLOOR_Y + 1, lz, stairs);
+        }
+
+        /** Two oak fence legs with a dark oak slab surface — an office desk. */
+        private void placeDesk(ChunkData chunk, int lx, int lz, int dx, int dz) {
+            if (dz != 0 || dx < 0 || dx > 1) return;
+            chunk.setBlock(lx, FLOOR_Y + 1, lz, Material.OAK_FENCE);
+            Slab slab = (Slab) Bukkit.createBlockData(Material.DARK_OAK_SLAB);
+            slab.setType(Slab.Type.BOTTOM);
+            chunk.setBlock(lx, FLOOR_Y + 2, lz, slab);
+        }
+
+        /** Two chiseled bookshelves stacked — a filing cabinet. */
+        private void placeCabinet(ChunkData chunk, int lx, int lz, int dx, int dz) {
+            if (dx != 0 || dz != 0) return;
+            chunk.setBlock(lx, FLOOR_Y + 1, lz, Material.CHISELED_BOOKSHELF);
+            chunk.setBlock(lx, FLOOR_Y + 2, lz, Material.CHISELED_BOOKSHELF);
         }
 
         /**
