@@ -1,0 +1,10 @@
+# Fraction of wall segments that have a doorway opening (0.0–1.0).
+# Lower values create a denser, more maze-like layout.
+wall-open-chance: 0.70
+
+escape-door:
+  # Set to false to disable the escape door entirely.
+  enabled: true
+  # One escape door appears on average every <rarity> rooms.
+  # Higher = rarer. Default 500 means roughly one door per very large area of exploration.
+  rarity: 500
