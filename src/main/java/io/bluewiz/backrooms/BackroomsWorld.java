@@ -184,7 +184,13 @@ public class BackroomsWorld {
             Material floorMat;
             if (isPit)         floorMat = pitFill;
             else if (inverted) floorMat = wallFor(level); // may be overwritten in placeRegularInterior
-            else               floorMat = floorFor(level);
+            else if (level == Level.POOLROOMS && interior) {
+                // Inset pool: pool-area tiles are water, rim tiles are white concrete
+                floorMat = (modX >= 3 && modX <= 9 && modZ >= 3 && modZ <= 9)
+                        ? Material.WATER : wallFor(level);
+            } else {
+                floorMat = floorFor(level);
+            }
             chunk.setBlock(lx, FLOOR_Y, lz, floorMat);
 
             // Sub-floor shaft/fill
@@ -226,7 +232,7 @@ public class BackroomsWorld {
                 if (!voidRoom) {
                     chunk.setBlock(lx, ceilY, lz, inverted ? floorFor(level) : ceilBaseFor(level));
                 }
-                chunk.setBlock(lx, ceilY + 1, lz, Material.BEDROCK);
+                chunk.setBlock(lx, ceilY + 1, lz, Material.BLACK_CONCRETE);
                 chunk.setBlock(lx, ceilY + 2, lz, Material.BEDROCK);
             }
 
@@ -256,7 +262,7 @@ public class BackroomsWorld {
             } else {
                 if (isPit) {
                     for (int y = FLOOR_Y + 1; y < ceilY; y++) {
-                        chunk.setBlock(lx, y, lz, pitFill);
+                        chunk.setBlock(lx, y, lz, Material.AIR);
                     }
                 } else if (isEscDoor) {
                     placeEscapeDoorInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, ceilY, level);
@@ -300,10 +306,8 @@ public class BackroomsWorld {
                 for (int y = FLOOR_Y + 1; y < ceilY; y++) {
                     chunk.setBlock(lx, y, lz, Material.AIR);
                 }
-                // Poolrooms: 1-block-deep water layer; no furniture (floats awkwardly in water)
-                if (level == Level.POOLROOMS) {
-                    chunk.setBlock(lx, FLOOR_Y + 1, lz, Material.WATER);
-                } else {
+                // Poolrooms: no furniture (would look odd floating over water)
+                if (level != Level.POOLROOMS) {
                     placeFurnitureAt(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
                 }
             }
@@ -471,15 +475,10 @@ public class BackroomsWorld {
             }
         }
 
-        /** Clears the passage opening and fills any remaining height with the wall material (low header).
-         *  Poolrooms also place a water source at floor+1 in passages so pools are contained. */
+        /** Clears the passage opening and fills any remaining height with the wall material (low header). */
         private void openPassage(ChunkData chunk, int lx, int lz, int height, int wallCeilY, Level level) {
             for (int y = FLOOR_Y + 1; y <= wallCeilY; y++) {
-                if (y == FLOOR_Y + 1 && level == Level.POOLROOMS) {
-                    chunk.setBlock(lx, y, lz, Material.WATER);
-                } else {
-                    chunk.setBlock(lx, y, lz, y < FLOOR_Y + 1 + height ? Material.AIR : wallFor(level));
-                }
+                chunk.setBlock(lx, y, lz, y < FLOOR_Y + 1 + height ? Material.AIR : wallFor(level));
             }
         }
 
