@@ -177,9 +177,12 @@ public class BackroomsWorld {
             int pitBottomY  = FLOOR_Y - PIT_DEPTH;     // 48 — black concrete floor of shaft
             int subFloorEnd = pitBottomY - SUB_FILL;   // 42 — bedrock seal layer
 
+            // Poolrooms pits fill with water — a dark column of water in both directions
+            Material pitFill = (level == Level.POOLROOMS) ? Material.WATER : Material.AIR;
+
             // Floor tile — inverted rooms swap to wall material (light tiles handled later)
             Material floorMat;
-            if (isPit)         floorMat = Material.AIR;
+            if (isPit)         floorMat = pitFill;
             else if (inverted) floorMat = wallFor(level); // may be overwritten in placeRegularInterior
             else               floorMat = floorFor(level);
             chunk.setBlock(lx, FLOOR_Y, lz, floorMat);
@@ -187,7 +190,7 @@ public class BackroomsWorld {
             // Sub-floor shaft/fill
             if (isPit) {
                 for (int y = FLOOR_Y - 1; y > pitBottomY; y--) {
-                    chunk.setBlock(lx, y, lz, Material.AIR);
+                    chunk.setBlock(lx, y, lz, pitFill);
                 }
                 chunk.setBlock(lx, pitBottomY, lz, Material.BLACK_CONCRETE);
             } else {
@@ -253,7 +256,7 @@ public class BackroomsWorld {
             } else {
                 if (isPit) {
                     for (int y = FLOOR_Y + 1; y < ceilY; y++) {
-                        chunk.setBlock(lx, y, lz, Material.AIR);
+                        chunk.setBlock(lx, y, lz, pitFill);
                     }
                 } else if (isEscDoor) {
                     placeEscapeDoorInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, ceilY, level);
