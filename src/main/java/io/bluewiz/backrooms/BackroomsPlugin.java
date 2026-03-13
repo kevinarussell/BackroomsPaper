@@ -47,6 +47,7 @@ public class BackroomsPlugin extends JavaPlugin {
         ambientSoundsEnabled         = getConfig().getBoolean("ambient-sounds.enabled", true);
         paranoidMessagesEnabled      = getConfig().getBoolean("paranoid-messages.enabled", true);
         paranoidMessageChance        = getConfig().getDouble("paranoid-messages.chance", 0.04);
+        boolean levelsEnabled        = getConfig().getBoolean("levels.enabled", true);
         noclipTriggerEnabled         = getConfig().getBoolean("noclip-trigger.enabled", true);
         noclipTriggerChance          = getConfig().getDouble("noclip-trigger.chance", 0.15);
         longFallTriggerEnabled       = getConfig().getBoolean("long-fall-trigger.enabled", true);
@@ -56,7 +57,7 @@ public class BackroomsPlugin extends JavaPlugin {
         portalTriggerChance          = getConfig().getDouble("portal-trigger.chance", 0.10);
 
         backroomsWorld = new BackroomsWorld(this, wallOpenChance, escapeEnabled, escapeRarity,
-                furnitureEnabled, furnitureChance);
+                furnitureEnabled, furnitureChance, levelsEnabled);
         backroomsWorld.ensureWorldExists();
 
         var cmd = getCommand("backrooms");

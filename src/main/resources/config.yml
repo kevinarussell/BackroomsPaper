@@ -26,6 +26,19 @@ paranoid-messages:
   # Default 0.04 averages roughly one message every 6 minutes.
   chance: 0.04
 
+levels:
+  # When true, the world is divided into 480-block zones, each assigned one of
+  # four level aesthetics. Zones cluster naturally from the hash — adjacent
+  # zones often share the same level, creating distinct regions.
+  #
+  #   Hallways  (40%) — classic yellow bamboo walls, horn coral floor
+  #   Warehouse (25%) — stone brick walls, smooth stone floor, lit lamps
+  #   Poolrooms (20%) — white concrete, prismarine floor, ankle-deep water
+  #   Office    (15%) — dark oak walls/floor, shroomlight ceiling panels
+  #
+  # Disable to make the entire world Level 0 (Hallways) only.
+  enabled: true
+
 noclip-trigger:
   # When true, suffocation (being crushed into a solid block) can send the
   # player to the backrooms instead of taking damage.
