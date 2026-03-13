@@ -57,7 +57,7 @@ long-fall-trigger:
 
 portal-trigger:
   # When true, each portal use has a random chance of sending the player
-  # to the backrooms instead of the nether/end. Off by default.
-  enabled: false
-  # Probability per portal use (0.0–1.0). Default 0.10 = 10% chance.
-  chance: 0.10
+  # to the backrooms instead of the nether/end. On by default.
+  enabled: true
+  # Probability per portal use (0.0–1.0). Default 0.02 = 2% chance.
+  chance: 0.02

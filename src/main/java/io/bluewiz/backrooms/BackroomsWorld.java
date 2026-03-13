@@ -321,6 +321,8 @@ public class BackroomsWorld {
         private static final int FURN_SOFA        = 1; // row of oak stairs
         private static final int FURN_DESK        = 2; // fence legs + dark oak slab surface
         private static final int FURN_CABINET     = 3; // stacked chiseled bookshelves
+        private static final int FURN_LAMP        = 4; // oak fence post + lantern on top
+        private static final int FURN_VASE        = 5; // potted plant directly on floor
 
         private static final Material[] POTTED_PLANTS = {
             Material.POTTED_FERN,
@@ -337,7 +339,7 @@ public class BackroomsWorld {
 
         private int furnitureType(long seed, int roomX, int roomZ) {
             long h = mix(seed ^ ((long) roomX * 0xABCDEF01L) ^ ((long) roomZ * 0x12345678L) ^ 99L);
-            return (int) ((h & 0xFF) % 4);
+            return (int) ((h & 0xFF) % 6);
         }
 
         /**
@@ -368,6 +370,8 @@ public class BackroomsWorld {
                 case FURN_SOFA        -> placeSofa(chunk, lx, lz, seed, roomX, roomZ, dx, dz);
                 case FURN_DESK        -> placeDesk(chunk, lx, lz, dx, dz);
                 case FURN_CABINET     -> placeCabinet(chunk, lx, lz, dx, dz);
+                case FURN_LAMP        -> placeLamp(chunk, lx, lz, dx, dz);
+                case FURN_VASE        -> placeVase(chunk, lx, lz, seed, roomX, roomZ, dx, dz);
             }
         }
 
@@ -406,6 +410,21 @@ public class BackroomsWorld {
             if (dx != 0 || dz != 0) return;
             chunk.setBlock(lx, FLOOR_Y + 1, lz, Material.CHISELED_BOOKSHELF);
             chunk.setBlock(lx, FLOOR_Y + 2, lz, Material.CHISELED_BOOKSHELF);
+        }
+
+        /** Oak fence post with a lantern on top — a floor lamp. */
+        private void placeLamp(ChunkData chunk, int lx, int lz, int dx, int dz) {
+            if (dx != 0 || dz != 0) return;
+            chunk.setBlock(lx, FLOOR_Y + 1, lz, Material.OAK_FENCE);
+            chunk.setBlock(lx, FLOOR_Y + 2, lz, Material.LANTERN);
+        }
+
+        /** Potted plant sitting directly on the floor — a decorative vase. */
+        private void placeVase(ChunkData chunk, int lx, int lz,
+                               long seed, int roomX, int roomZ, int dx, int dz) {
+            if (dx != 0 || dz != 0) return;
+            long h = mix(seed ^ ((long) roomX * 0x99999L) ^ ((long) roomZ * 0xAAAAL));
+            chunk.setBlock(lx, FLOOR_Y + 1, lz, POTTED_PLANTS[(int) ((h & 0xFF) % POTTED_PLANTS.length)]);
         }
 
         /**

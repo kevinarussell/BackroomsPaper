@@ -3,7 +3,6 @@ package io.bluewiz.backrooms;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -14,7 +13,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class BackroomsPlugin extends JavaPlugin {
@@ -160,28 +158,8 @@ public class BackroomsPlugin extends JavaPlugin {
         target.teleport(backroomsWorld.getSpawnLocation());
         getLogger().info(target.getName() + " entered the Backrooms.");
 
-        Bukkit.getScheduler().runTaskLater(this, () -> {
-            target.setGameMode(GameMode.ADVENTURE);
-            target.showTitle(Title.title(
-                    Component.text("YOU HAVE NO-CLIPPED")
-                            .color(NamedTextColor.YELLOW)
-                            .decorate(TextDecoration.BOLD),
-                    Component.text("there is no escape")
-                            .color(NamedTextColor.DARK_GRAY)
-                            .decorate(TextDecoration.ITALIC),
-                    Title.Times.times(
-                            Duration.ofMillis(500),
-                            Duration.ofSeconds(3),
-                            Duration.ofSeconds(1)
-                    )
-            ));
-            target.sendMessage(Component.empty());
-            target.sendMessage(Component.text("The smell of moist carpet fills your lungs.")
-                    .color(NamedTextColor.GOLD));
-            target.sendMessage(Component.text("The fluorescent lights hum. You are alone.")
-                    .color(NamedTextColor.GRAY).decorate(TextDecoration.ITALIC));
-            target.sendMessage(Component.empty());
-        }, 40L);
+        Bukkit.getScheduler().runTaskLater(this, () ->
+            target.setGameMode(GameMode.ADVENTURE), 40L);
     }
 
     /** Saves the player's current gamemode before sending them to the backrooms. */

@@ -15,14 +15,17 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
 import org.bukkit.block.data.type.WallSign;
 import org.bukkit.block.sign.Side;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
@@ -31,6 +34,7 @@ import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.EulerAngle;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -165,6 +169,35 @@ public class BackroomsListener implements Listener {
                 sign.update();
             }
         }
+
+        // ---- Armor stand (~4%) -----------------------------------------------
+        long ah = mix(seed ^ ((long) roomX * 0x4b3a2c1d0e5f6a7bL)
+                           ^ ((long) roomZ * 0xc7b6a5d4e3f2019aL)
+                           ^ 0x2d3e4f5061728394L);
+        if ((ah & 0xFF) < 10) { // ~4%
+            int apos = 3 + (int) ((ah >>> 8) % 6);  // 3–8 in both axes
+            int bpos = 3 + (int) ((ah >>> 14) % 6);
+            double yaw = ((ah >>> 20) % 360);
+
+            Block standFloor = world.getBlockAt(roomX * period + apos, floorY, roomZ * period + bpos);
+            if (standFloor.getType() != Material.AIR) {
+                Location loc = new Location(world,
+                        roomX * period + apos + 0.5, floorY + 1, roomZ * period + bpos + 0.5, (float) yaw, 0);
+                try {
+                    world.spawn(loc, ArmorStand.class, stand -> {
+                        stand.setVisible(true);
+                        stand.setGravity(false);
+                        stand.setBasePlate(false);
+                        stand.setSmall(false);
+                        // Slightly off poses — something feels wrong about it
+                        double tilt = ((ah >>> 26) & 1) == 0 ? 0.2 : -0.2;
+                        stand.setHeadPose(new EulerAngle(tilt, 0, 0));
+                        stand.setRightArmPose(new EulerAngle(-0.4, 0.1, 0.3));
+                        stand.setLeftArmPose(new EulerAngle(0.1, -0.2, -0.1));
+                    });
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -251,8 +284,15 @@ public class BackroomsListener implements Listener {
         }
     }
 
+    /** Suppress the death message — no one hears you die in here. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerDeath(PlayerDeathEvent e) {
+        if (!e.getEntity().getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
+        e.deathMessage(null);
+    }
+
     /** Dying in the backrooms respawns you in the backrooms. Dying is not an escape. */
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerRespawn(PlayerRespawnEvent e) {
         Player player = e.getPlayer();
         if (player.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) {
