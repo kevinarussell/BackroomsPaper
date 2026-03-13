@@ -22,8 +22,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
@@ -40,12 +42,29 @@ public class BackroomsListener implements Listener {
 
     private final BackroomsPlugin plugin;
     private final BackroomsWorld  backroomsWorld;
+    private final boolean noclipTriggerEnabled;
+    private final double  noclipTriggerChance;
+    private final boolean longFallTriggerEnabled;
+    private final double  longFallMinDamage;
+    private final double  longFallTriggerChance;
+    private final boolean portalTriggerEnabled;
+    private final double  portalTriggerChance;
     // Guards against the move event firing twice before the teleport takes effect
     private final Set<UUID> fallingPlayers = new HashSet<>();
 
-    public BackroomsListener(BackroomsPlugin plugin, BackroomsWorld backroomsWorld) {
-        this.plugin         = plugin;
-        this.backroomsWorld = backroomsWorld;
+    public BackroomsListener(BackroomsPlugin plugin, BackroomsWorld backroomsWorld,
+                             boolean noclipTriggerEnabled, double noclipTriggerChance,
+                             boolean longFallTriggerEnabled, double longFallMinDamage, double longFallTriggerChance,
+                             boolean portalTriggerEnabled, double portalTriggerChance) {
+        this.plugin                 = plugin;
+        this.backroomsWorld         = backroomsWorld;
+        this.noclipTriggerEnabled   = noclipTriggerEnabled;
+        this.noclipTriggerChance    = noclipTriggerChance;
+        this.longFallTriggerEnabled = longFallTriggerEnabled;
+        this.longFallMinDamage      = longFallMinDamage;
+        this.longFallTriggerChance  = longFallTriggerChance;
+        this.portalTriggerEnabled   = portalTriggerEnabled;
+        this.portalTriggerChance    = portalTriggerChance;
     }
 
     // -------------------------------------------------------------------------
@@ -292,6 +311,57 @@ public class BackroomsListener implements Listener {
         }, 30L);
 
         plugin.getLogger().info(player.getName() + " escaped the Backrooms.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Noclip / long-fall / portal entry triggers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Suffocation trigger ("noclip"). Being crushed into a solid block sends
+     * the player to the backrooms. The damage is cancelled so they arrive
+     * at full health. Only fires outside the backrooms world.
+     */
+    @EventHandler
+    public void onPlayerSuffocate(EntityDamageEvent e) {
+        if (!noclipTriggerEnabled) return;
+        if (!(e.getEntity() instanceof Player player)) return;
+        if (player.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
+        if (e.getCause() != EntityDamageEvent.DamageCause.SUFFOCATION) return;
+        if (ThreadLocalRandom.current().nextDouble() >= noclipTriggerChance) return;
+        e.setCancelled(true);
+        plugin.sendToBackrooms(player);
+    }
+
+    /**
+     * Long-fall trigger. A fall dealing at least <min-damage> raw damage sends
+     * the player to the backrooms instead of hurting them. Threshold defaults
+     * to 8 (≈ falling from 11 blocks). Only fires outside the backrooms world.
+     */
+    @EventHandler
+    public void onPlayerLongFall(EntityDamageEvent e) {
+        if (!longFallTriggerEnabled) return;
+        if (!(e.getEntity() instanceof Player player)) return;
+        if (player.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
+        if (e.getCause() != EntityDamageEvent.DamageCause.FALL) return;
+        if (e.getDamage() < longFallMinDamage) return;
+        if (ThreadLocalRandom.current().nextDouble() >= longFallTriggerChance) return;
+        e.setCancelled(true);
+        plugin.sendToBackrooms(player);
+    }
+
+    /**
+     * Portal trigger. Each portal use has a configurable chance of sending the
+     * player to the backrooms instead of the nether/end. Off by default.
+     */
+    @EventHandler
+    public void onPlayerPortal(PlayerPortalEvent e) {
+        if (!portalTriggerEnabled) return;
+        Player player = e.getPlayer();
+        if (player.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
+        if (ThreadLocalRandom.current().nextDouble() >= portalTriggerChance) return;
+        e.setCancelled(true);
+        plugin.sendToBackrooms(player);
     }
 
     /**

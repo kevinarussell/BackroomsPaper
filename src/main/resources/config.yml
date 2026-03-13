@@ -25,3 +25,26 @@ paranoid-messages:
   # Probability per player per ~15 seconds of receiving a message (0.0–1.0).
   # Default 0.04 averages roughly one message every 6 minutes.
   chance: 0.04
+
+noclip-trigger:
+  # When true, suffocation (being crushed into a solid block) can send the
+  # player to the backrooms instead of taking damage.
+  enabled: true
+  # Probability per suffocation hit (0.0–1.0). Default 0.15 = 15% per hit.
+  chance: 0.15
+
+long-fall-trigger:
+  # When true, a qualifying fall can send the player to the backrooms instead
+  # of taking fall damage.
+  enabled: true
+  # Raw fall damage threshold (before armor). Default 8 ≈ falling from 11 blocks.
+  min-damage: 8.0
+  # Probability per qualifying fall (0.0–1.0). Default 0.25 = 25% chance.
+  chance: 0.25
+
+portal-trigger:
+  # When true, each portal use has a random chance of sending the player
+  # to the backrooms instead of the nether/end. Off by default.
+  enabled: false
+  # Probability per portal use (0.0–1.0). Default 0.10 = 10% chance.
+  chance: 0.10

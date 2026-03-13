@@ -3,7 +3,6 @@ package io.bluewiz.backrooms;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -11,7 +10,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -65,48 +63,18 @@ public class BackroomsCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        var world = backroomsWorld.getWorld();
-        if (world == null) {
+        if (backroomsWorld.getWorld() == null) {
             sender.sendMessage(Component.text("The Backrooms are unreachable. (World failed to load.)")
                     .color(NamedTextColor.RED));
             return;
         }
-
-        plugin.saveGameMode(target);
-        plugin.saveReturnLocation(target);
-        target.teleport(backroomsWorld.getSpawnLocation());
 
         if (sender != target) {
             sender.sendMessage(Component.text(target.getName() + " has been sent to the Backrooms. Godspeed.")
                     .color(NamedTextColor.YELLOW));
         }
 
-        plugin.getLogger().info(target.getName() + " entered the Backrooms.");
-
-        // Title fires after the world-load screen clears.
-        // Chat messages during cross-world teleport are silently dropped by the client.
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            target.setGameMode(org.bukkit.GameMode.ADVENTURE);
-            target.showTitle(Title.title(
-                    Component.text("YOU HAVE NO-CLIPPED")
-                            .color(NamedTextColor.YELLOW)
-                            .decorate(TextDecoration.BOLD),
-                    Component.text("there is no escape")
-                            .color(NamedTextColor.DARK_GRAY)
-                            .decorate(TextDecoration.ITALIC),
-                    Title.Times.times(
-                            Duration.ofMillis(500),
-                            Duration.ofSeconds(3),
-                            Duration.ofSeconds(1)
-                    )
-            ));
-            target.sendMessage(Component.empty());
-            target.sendMessage(Component.text("The smell of moist carpet fills your lungs.")
-                    .color(NamedTextColor.GOLD));
-            target.sendMessage(Component.text("The fluorescent lights hum. You are alone.")
-                    .color(NamedTextColor.GRAY).decorate(TextDecoration.ITALIC));
-            target.sendMessage(Component.empty());
-        }, 40L);
+        plugin.sendToBackrooms(target);
     }
 
     @Override

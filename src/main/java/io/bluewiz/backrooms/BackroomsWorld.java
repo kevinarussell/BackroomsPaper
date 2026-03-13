@@ -10,6 +10,7 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.WorldInfo;
 
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class BackroomsWorld {
 
@@ -62,7 +63,13 @@ public class BackroomsWorld {
     }
 
     public Location getSpawnLocation() {
-        return new Location(world, 6.5, BackroomsGenerator.FLOOR_Y + 1, 6.5);
+        var rng   = ThreadLocalRandom.current();
+        int roomX = rng.nextInt(-200, 201);
+        int roomZ = rng.nextInt(-200, 201);
+        return new Location(world,
+                roomX * BackroomsGenerator.PERIOD + 2.5,
+                BackroomsGenerator.FLOOR_Y + 1,
+                roomZ * BackroomsGenerator.PERIOD + 2.5);
     }
 
     // -------------------------------------------------------------------------
@@ -70,12 +77,27 @@ public class BackroomsWorld {
     public static class BackroomsGenerator extends ChunkGenerator {
 
         static final int FLOOR_Y = 64;
-        static final int CEIL_Y  = FLOOR_Y + 4;  // 68
 
         private static final int PIT_DEPTH = 16; // shaft depth; air from FLOOR_Y down to FLOOR_Y-PIT_DEPTH+1
         private static final int SUB_FILL  = 6;  // smooth stone below pit floor before bedrock seal
 
         static final int PERIOD = 12; // package-visible for pit teleport destination
+
+        // ---- Ceiling modifier constants -----------------------------------------
+        // Computed per-room via roomCeilingMod(); controls ceiling height and material.
+        private static final int MOD_NORMAL   = 0; // standard 4-block height
+        private static final int MOD_LOW      = 1; // 3 blocks — cramped
+        private static final int MOD_TALL     = 2; // 7 blocks — open
+        private static final int MOD_GRAND    = 3; // 12 blocks — cavernous
+        private static final int MOD_VOID     = 4; // 24 blocks, no ceiling panel
+        private static final int MOD_INVERTED = 5; // floor/ceiling materials swapped
+
+        // Inner height in blocks (floor block to ceiling block, exclusive)
+        private static final int H_LOW    = 3;
+        private static final int H_NORMAL = 4;
+        private static final int H_TALL   = 7;
+        private static final int H_GRAND  = 12;
+        private static final int H_VOID   = 24;
 
         private static final int TYPE_STANDARD    = 0;
         private static final int TYPE_OPEN        = 1;
@@ -128,11 +150,21 @@ public class BackroomsWorld {
             boolean inPitRoom = interior && !isEscDoor && typeVal == TYPE_PIT;
             boolean isPit     = inPitRoom && tileIsPit(seed, roomX, roomZ, modX, modZ);
 
+            // Ceiling modifier — escape rooms always use normal height (door frame hardcoded)
+            int     mod       = isEscDoor ? MOD_NORMAL : roomCeilingMod(seed, roomX, roomZ);
+            int     ceilY     = FLOOR_Y + heightForMod(mod);
+            boolean inverted  = mod == MOD_INVERTED;
+            boolean voidRoom  = mod == MOD_VOID;
+
             int pitBottomY  = FLOOR_Y - PIT_DEPTH;     // 48 — black concrete floor of shaft
             int subFloorEnd = pitBottomY - SUB_FILL;   // 42 — bedrock seal layer
 
-            // Floor tile
-            chunk.setBlock(lx, FLOOR_Y, lz, isPit ? Material.AIR : Material.HORN_CORAL_BLOCK);
+            // Floor tile — inverted rooms swap to bamboo/froglight (light tiles handled later)
+            Material floorMat;
+            if (isPit)               floorMat = Material.AIR;
+            else if (inverted)       floorMat = Material.BAMBOO_PLANKS; // may be overwritten in placeRegularInterior
+            else                     floorMat = Material.HORN_CORAL_BLOCK;
+            chunk.setBlock(lx, FLOOR_Y, lz, floorMat);
 
             // Sub-floor shaft/fill
             if (isPit) {
@@ -156,22 +188,24 @@ public class BackroomsWorld {
             }
             chunk.setBlock(lx, subFloorEnd, lz, Material.BEDROCK);
 
-            // Ceiling — always sealed
-            chunk.setBlock(lx, CEIL_Y,     lz, Material.YELLOW_CONCRETE);
-            chunk.setBlock(lx, CEIL_Y + 1, lz, Material.BEDROCK);
-            chunk.setBlock(lx, CEIL_Y + 2, lz, Material.BEDROCK);
+            // Ceiling — inverted rooms use horn coral; void rooms skip the panel entirely
+            if (!voidRoom) {
+                chunk.setBlock(lx, ceilY, lz, inverted ? Material.HORN_CORAL_BLOCK : Material.YELLOW_CONCRETE);
+            }
+            chunk.setBlock(lx, ceilY + 1, lz, Material.BEDROCK);
+            chunk.setBlock(lx, ceilY + 2, lz, Material.BEDROCK);
 
             if (wallX && wallZ) {
-                solidWall(chunk, lx, lz);
+                solidWall(chunk, lx, lz, ceilY);
 
             } else if (wallX) {
                 int width     = doorWidth(seed, roomX, roomZ, 0);
                 int height    = doorHeight(seed, roomX, roomZ, 0);
                 int doorStart = doorwayStart(seed, roomX, roomZ, 0, width);
                 if (isWallOpen(seed, roomX, roomZ, 0) && modZ >= doorStart && modZ < doorStart + width) {
-                    openPassage(chunk, lx, lz, height);
+                    openPassage(chunk, lx, lz, height, ceilY);
                 } else {
-                    solidWall(chunk, lx, lz);
+                    solidWall(chunk, lx, lz, ceilY);
                 }
 
             } else if (wallZ) {
@@ -179,20 +213,20 @@ public class BackroomsWorld {
                 int height    = doorHeight(seed, roomX, roomZ, 1);
                 int doorStart = doorwayStart(seed, roomX, roomZ, 1, width);
                 if (isWallOpen(seed, roomX, roomZ, 1) && modX >= doorStart && modX < doorStart + width) {
-                    openPassage(chunk, lx, lz, height);
+                    openPassage(chunk, lx, lz, height, ceilY);
                 } else {
-                    solidWall(chunk, lx, lz);
+                    solidWall(chunk, lx, lz, ceilY);
                 }
 
             } else {
                 if (isPit) {
-                    for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
+                    for (int y = FLOOR_Y + 1; y < ceilY; y++) {
                         chunk.setBlock(lx, y, lz, Material.AIR);
                     }
                 } else if (isEscDoor) {
-                    placeEscapeDoorInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, lightMaterial(seed, roomX, roomZ));
+                    placeEscapeDoorInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, lightMaterial(seed, roomX, roomZ), ceilY);
                 } else {
-                    placeRegularInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, typeVal, lightMaterial(seed, roomX, roomZ));
+                    placeRegularInterior(chunk, lx, lz, seed, roomX, roomZ, modX, modZ, typeVal, lightMaterial(seed, roomX, roomZ), ceilY, inverted, voidRoom);
                 }
             }
         }
@@ -203,7 +237,7 @@ public class BackroomsWorld {
 
         private void placeRegularInterior(ChunkData chunk, int lx, int lz,
                                           long seed, int roomX, int roomZ, int modX, int modZ, int type,
-                                          Material light) {
+                                          Material light, int ceilY, boolean inverted, boolean voidRoom) {
             boolean isWall = switch (type) {
                 case TYPE_STANDARD   -> isStandardPillar(seed, roomX, roomZ, modX, modZ);
                 case TYPE_OPEN       -> false;
@@ -214,12 +248,21 @@ public class BackroomsWorld {
             };
 
             if (isWall) {
-                solidWall(chunk, lx, lz);
+                solidWall(chunk, lx, lz, ceilY);
             } else {
-                if (isLightTile(modX, modZ)) {
-                    chunk.setBlock(lx, CEIL_Y, lz, light);
+                if (inverted) {
+                    // Froglight moves to the floor; ceiling is already HORN_CORAL_BLOCK
+                    if (isLightTile(modX, modZ)) {
+                        chunk.setBlock(lx, FLOOR_Y, lz, light);
+                    }
+                } else if (!voidRoom) {
+                    // Normal: froglight overwrites the yellow concrete ceiling panel
+                    if (isLightTile(modX, modZ)) {
+                        chunk.setBlock(lx, ceilY, lz, light);
+                    }
                 }
-                for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
+                // Void rooms have no ceiling panel and no froglight — pitch dark above
+                for (int y = FLOOR_Y + 1; y < ceilY; y++) {
                     chunk.setBlock(lx, y, lz, Material.AIR);
                 }
                 placeFurnitureAt(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
@@ -336,14 +379,14 @@ public class BackroomsWorld {
          */
         private void placeEscapeDoorInterior(ChunkData chunk, int lx, int lz,
                                               long seed, int roomX, int roomZ, int modX, int modZ,
-                                              Material light) {
+                                              Material light, int ceilY) {
             int doorX = escapeDoorX(seed, roomX, roomZ);
             int doorZ = escapeDoorZ(seed, roomX, roomZ);
 
             if (modZ == doorZ) {
                 if (modX == doorX - 1 || modX == doorX + 1) {
                     // Side posts — dark oak log from floor to top, replacing air
-                    for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
+                    for (int y = FLOOR_Y + 1; y < ceilY; y++) {
                         chunk.setBlock(lx, y, lz, Material.DARK_OAK_LOG);
                     }
                     return;
@@ -371,9 +414,9 @@ public class BackroomsWorld {
 
             // All other interior positions — open air, normal lights
             if (isLightTile(modX, modZ)) {
-                chunk.setBlock(lx, CEIL_Y, lz, light);
+                chunk.setBlock(lx, ceilY, lz, light);
             }
-            for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
+            for (int y = FLOOR_Y + 1; y < ceilY; y++) {
                 chunk.setBlock(lx, y, lz, Material.AIR);
             }
         }
@@ -382,15 +425,15 @@ public class BackroomsWorld {
         // Block helpers
         // -------------------------------------------------------------------------
 
-        private void solidWall(ChunkData chunk, int lx, int lz) {
-            for (int y = FLOOR_Y; y < CEIL_Y; y++) {
+        private void solidWall(ChunkData chunk, int lx, int lz, int ceilY) {
+            for (int y = FLOOR_Y; y < ceilY; y++) {
                 chunk.setBlock(lx, y, lz, Material.BAMBOO_PLANKS);
             }
         }
 
         /** Clears the passage opening and fills any remaining height with bamboo (low header). */
-        private void openPassage(ChunkData chunk, int lx, int lz, int height) {
-            for (int y = FLOOR_Y + 1; y < CEIL_Y; y++) {
+        private void openPassage(ChunkData chunk, int lx, int lz, int height, int ceilY) {
+            for (int y = FLOOR_Y + 1; y < ceilY; y++) {
                 chunk.setBlock(lx, y, lz, y < FLOOR_Y + 1 + height ? Material.AIR : Material.BAMBOO_PLANKS);
             }
         }
@@ -398,6 +441,41 @@ public class BackroomsWorld {
         // -------------------------------------------------------------------------
         // Layout helpers
         // -------------------------------------------------------------------------
+
+        /**
+         * Per-room ceiling modifier. Uses a hash independent of room type so any
+         * combination of room type and ceiling height can occur.
+         *
+         * Distribution (256 buckets):
+         *   VOID      v <  5  → ~2%   no ceiling panel, pitch dark above
+         *   INVERTED  v < 10  → ~2%   floor/ceiling materials swapped
+         *   GRAND     v < 25  → ~6%   12-block height
+         *   TALL      v < 58  → ~13%  7-block height
+         *   LOW       v < 91  → ~13%  3-block height (cramped)
+         *   NORMAL    else    → ~64%  4-block height (default)
+         */
+        private int roomCeilingMod(long seed, int roomX, int roomZ) {
+            long h = mix(seed ^ ((long) roomX * 0x2a9ef5b4c3d1e607L)
+                               ^ ((long) roomZ * 0x8b3f9c2d1a4e7f05L)
+                               ^ 0x5c7b3a2d1e4f6890L);
+            int v = (int) (h & 0xFF);
+            if (v <  5) return MOD_VOID;
+            if (v < 10) return MOD_INVERTED;
+            if (v < 25) return MOD_GRAND;
+            if (v < 58) return MOD_TALL;
+            if (v < 91) return MOD_LOW;
+            return MOD_NORMAL;
+        }
+
+        private int heightForMod(int mod) {
+            return switch (mod) {
+                case MOD_LOW      -> H_LOW;
+                case MOD_TALL     -> H_TALL;
+                case MOD_GRAND    -> H_GRAND;
+                case MOD_VOID     -> H_VOID;
+                default           -> H_NORMAL; // NORMAL and INVERTED both use standard height
+            };
+        }
 
         /** ~3% of rooms have green froglights instead of ochre — a bad sign. */
         private Material lightMaterial(long worldSeed, int roomX, int roomZ) {

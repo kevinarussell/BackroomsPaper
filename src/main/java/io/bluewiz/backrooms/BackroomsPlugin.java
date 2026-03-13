@@ -3,6 +3,7 @@ package io.bluewiz.backrooms;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -13,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class BackroomsPlugin extends JavaPlugin {
@@ -23,6 +25,13 @@ public class BackroomsPlugin extends JavaPlugin {
     private boolean ambientSoundsEnabled;
     private boolean paranoidMessagesEnabled;
     private double  paranoidMessageChance;
+    private boolean noclipTriggerEnabled;
+    private double  noclipTriggerChance;
+    private boolean longFallTriggerEnabled;
+    private double  longFallMinDamage;
+    private double  longFallTriggerChance;
+    private boolean portalTriggerEnabled;
+    private double  portalTriggerChance;
 
     @Override
     public void onEnable() {
@@ -38,6 +47,13 @@ public class BackroomsPlugin extends JavaPlugin {
         ambientSoundsEnabled         = getConfig().getBoolean("ambient-sounds.enabled", true);
         paranoidMessagesEnabled      = getConfig().getBoolean("paranoid-messages.enabled", true);
         paranoidMessageChance        = getConfig().getDouble("paranoid-messages.chance", 0.04);
+        noclipTriggerEnabled         = getConfig().getBoolean("noclip-trigger.enabled", true);
+        noclipTriggerChance          = getConfig().getDouble("noclip-trigger.chance", 0.15);
+        longFallTriggerEnabled       = getConfig().getBoolean("long-fall-trigger.enabled", true);
+        longFallMinDamage            = getConfig().getDouble("long-fall-trigger.min-damage", 8.0);
+        longFallTriggerChance        = getConfig().getDouble("long-fall-trigger.chance", 0.25);
+        portalTriggerEnabled         = getConfig().getBoolean("portal-trigger.enabled", false);
+        portalTriggerChance          = getConfig().getDouble("portal-trigger.chance", 0.10);
 
         backroomsWorld = new BackroomsWorld(this, wallOpenChance, escapeEnabled, escapeRarity,
                 furnitureEnabled, furnitureChance);
@@ -50,7 +66,12 @@ public class BackroomsPlugin extends JavaPlugin {
             cmd.setTabCompleter(handler);
         }
 
-        Bukkit.getPluginManager().registerEvents(new BackroomsListener(this, backroomsWorld), this);
+        Bukkit.getPluginManager().registerEvents(
+                new BackroomsListener(this, backroomsWorld,
+                        noclipTriggerEnabled, noclipTriggerChance,
+                        longFallTriggerEnabled, longFallMinDamage, longFallTriggerChance,
+                        portalTriggerEnabled, portalTriggerChance),
+                this);
 
         Bukkit.getScheduler().runTaskTimer(this, this::tickAmbientSounds, 100L, 280L);
         // 300 ticks (15s) interval, 4% chance per player → avg ~6 min between messages
@@ -122,6 +143,44 @@ public class BackroomsPlugin extends JavaPlugin {
 
     public BackroomsWorld getBackroomsWorld() {
         return backroomsWorld;
+    }
+
+    /**
+     * Teleports a player into the backrooms: saves their state, teleports to a random room,
+     * sets adventure mode, and shows the entry title. No-ops if they're already inside.
+     */
+    public void sendToBackrooms(Player target) {
+        if (target.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
+        World world = backroomsWorld.getWorld();
+        if (world == null) return;
+
+        saveGameMode(target);
+        saveReturnLocation(target);
+        target.teleport(backroomsWorld.getSpawnLocation());
+        getLogger().info(target.getName() + " entered the Backrooms.");
+
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            target.setGameMode(GameMode.ADVENTURE);
+            target.showTitle(Title.title(
+                    Component.text("YOU HAVE NO-CLIPPED")
+                            .color(NamedTextColor.YELLOW)
+                            .decorate(TextDecoration.BOLD),
+                    Component.text("there is no escape")
+                            .color(NamedTextColor.DARK_GRAY)
+                            .decorate(TextDecoration.ITALIC),
+                    Title.Times.times(
+                            Duration.ofMillis(500),
+                            Duration.ofSeconds(3),
+                            Duration.ofSeconds(1)
+                    )
+            ));
+            target.sendMessage(Component.empty());
+            target.sendMessage(Component.text("The smell of moist carpet fills your lungs.")
+                    .color(NamedTextColor.GOLD));
+            target.sendMessage(Component.text("The fluorescent lights hum. You are alone.")
+                    .color(NamedTextColor.GRAY).decorate(TextDecoration.ITALIC));
+            target.sendMessage(Component.empty());
+        }, 40L);
     }
 
     /** Saves the player's current gamemode before sending them to the backrooms. */
