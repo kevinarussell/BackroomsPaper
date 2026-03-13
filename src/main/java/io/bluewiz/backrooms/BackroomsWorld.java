@@ -204,24 +204,40 @@ public class BackroomsWorld {
             }
             chunk.setBlock(lx, subFloorEnd, lz, Material.BEDROCK);
 
-            // Ceiling — inverted swaps floor/ceiling materials; void skips the panel
-            if (!voidRoom) {
-                chunk.setBlock(lx, ceilY, lz, inverted ? floorFor(level) : ceilBaseFor(level));
+            // Walls take the max ceiling height of both adjacent rooms so that a tall
+            // room is always fully enclosed on every side, not just north/west.
+            // (North/west walls are owned by this room; east/south walls are owned by
+            // the neighbour, so without the max they'd only reach the neighbour's height.)
+            int effectiveCeilY = ceilY;
+            if (wallX) effectiveCeilY = Math.max(effectiveCeilY,
+                    FLOOR_Y + heightForMod(roomCeilingMod(seed, roomX - 1, roomZ)));
+            if (wallZ) effectiveCeilY = Math.max(effectiveCeilY,
+                    FLOOR_Y + heightForMod(roomCeilingMod(seed, roomX, roomZ - 1)));
+
+            if (wallX || wallZ) {
+                // Solid wall: fills all the way to effectiveCeilY (no separate ceiling panel)
+                chunk.setBlock(lx, effectiveCeilY + 1, lz, Material.BEDROCK);
+                chunk.setBlock(lx, effectiveCeilY + 2, lz, Material.BEDROCK);
+            } else {
+                // Interior: ceiling panel at ceilY, then seal
+                if (!voidRoom) {
+                    chunk.setBlock(lx, ceilY, lz, inverted ? floorFor(level) : ceilBaseFor(level));
+                }
+                chunk.setBlock(lx, ceilY + 1, lz, Material.BEDROCK);
+                chunk.setBlock(lx, ceilY + 2, lz, Material.BEDROCK);
             }
-            chunk.setBlock(lx, ceilY + 1, lz, Material.BEDROCK);
-            chunk.setBlock(lx, ceilY + 2, lz, Material.BEDROCK);
 
             if (wallX && wallZ) {
-                solidWall(chunk, lx, lz, ceilY, level);
+                solidWall(chunk, lx, lz, effectiveCeilY, level);
 
             } else if (wallX) {
                 int width     = doorWidth(seed, roomX, roomZ, 0);
                 int height    = doorHeight(seed, roomX, roomZ, 0);
                 int doorStart = doorwayStart(seed, roomX, roomZ, 0, width);
                 if (isWallOpen(seed, roomX, roomZ, 0) && modZ >= doorStart && modZ < doorStart + width) {
-                    openPassage(chunk, lx, lz, height, ceilY, level);
+                    openPassage(chunk, lx, lz, height, effectiveCeilY, level);
                 } else {
-                    solidWall(chunk, lx, lz, ceilY, level);
+                    solidWall(chunk, lx, lz, effectiveCeilY, level);
                 }
 
             } else if (wallZ) {
@@ -229,9 +245,9 @@ public class BackroomsWorld {
                 int height    = doorHeight(seed, roomX, roomZ, 1);
                 int doorStart = doorwayStart(seed, roomX, roomZ, 1, width);
                 if (isWallOpen(seed, roomX, roomZ, 1) && modX >= doorStart && modX < doorStart + width) {
-                    openPassage(chunk, lx, lz, height, ceilY, level);
+                    openPassage(chunk, lx, lz, height, effectiveCeilY, level);
                 } else {
-                    solidWall(chunk, lx, lz, ceilY, level);
+                    solidWall(chunk, lx, lz, effectiveCeilY, level);
                 }
 
             } else {
@@ -281,11 +297,12 @@ public class BackroomsWorld {
                 for (int y = FLOOR_Y + 1; y < ceilY; y++) {
                     chunk.setBlock(lx, y, lz, Material.AIR);
                 }
-                // Poolrooms: 1-block-deep water layer — air fill already cleared Y=65 to AIR above
+                // Poolrooms: 1-block-deep water layer; no furniture (floats awkwardly in water)
                 if (level == Level.POOLROOMS) {
                     chunk.setBlock(lx, FLOOR_Y + 1, lz, Material.WATER);
+                } else {
+                    placeFurnitureAt(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
                 }
-                placeFurnitureAt(chunk, lx, lz, seed, roomX, roomZ, modX, modZ);
             }
         }
 
@@ -445,16 +462,16 @@ public class BackroomsWorld {
         // Block helpers
         // -------------------------------------------------------------------------
 
-        private void solidWall(ChunkData chunk, int lx, int lz, int ceilY, Level level) {
-            for (int y = FLOOR_Y; y < ceilY; y++) {
+        private void solidWall(ChunkData chunk, int lx, int lz, int wallCeilY, Level level) {
+            for (int y = FLOOR_Y; y <= wallCeilY; y++) {
                 chunk.setBlock(lx, y, lz, wallFor(level));
             }
         }
 
         /** Clears the passage opening and fills any remaining height with the wall material (low header).
          *  Poolrooms also place a water source at floor+1 in passages so pools are contained. */
-        private void openPassage(ChunkData chunk, int lx, int lz, int height, int ceilY, Level level) {
-            for (int y = FLOOR_Y + 1; y < ceilY; y++) {
+        private void openPassage(ChunkData chunk, int lx, int lz, int height, int wallCeilY, Level level) {
+            for (int y = FLOOR_Y + 1; y <= wallCeilY; y++) {
                 if (y == FLOOR_Y + 1 && level == Level.POOLROOMS) {
                     chunk.setBlock(lx, y, lz, Material.WATER);
                 } else {
@@ -487,7 +504,7 @@ public class BackroomsWorld {
         private Material floorFor(Level l) {
             return switch (l) {
                 case WAREHOUSE -> Material.SMOOTH_STONE;
-                case POOLROOMS -> Material.PRISMARINE;
+                case POOLROOMS -> Material.DARK_PRISMARINE;
                 case OFFICE    -> Material.DARK_OAK_PLANKS;
                 default        -> Material.HORN_CORAL_BLOCK;
             };
