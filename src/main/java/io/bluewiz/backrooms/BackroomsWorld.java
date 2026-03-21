@@ -24,11 +24,12 @@ public class BackroomsWorld {
     private final boolean furnitureEnabled;
     private final double  furnitureChance;
     private final boolean levelsEnabled;
+    private final boolean keepInventory;
     private World world;
 
     public BackroomsWorld(BackroomsPlugin plugin, double wallOpenChance, boolean escapeEnabled,
                           int escapeRarity, boolean furnitureEnabled, double furnitureChance,
-                          boolean levelsEnabled) {
+                          boolean levelsEnabled, boolean keepInventory) {
         this.plugin           = plugin;
         this.wallOpenChance   = wallOpenChance;
         this.escapeEnabled    = escapeEnabled;
@@ -36,6 +37,7 @@ public class BackroomsWorld {
         this.furnitureEnabled = furnitureEnabled;
         this.furnitureChance  = furnitureChance;
         this.levelsEnabled    = levelsEnabled;
+        this.keepInventory    = keepInventory;
     }
 
     public void ensureWorldExists() {
@@ -57,7 +59,7 @@ public class BackroomsWorld {
             world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
             world.setGameRule(GameRule.DO_MOB_SPAWNING, true);
             world.setGameRule(GameRule.NATURAL_REGENERATION, false);
-            world.setGameRule(GameRule.KEEP_INVENTORY, false);
+            world.setGameRule(GameRule.KEEP_INVENTORY, keepInventory);
             plugin.getLogger().info("Backrooms world generated.");
         }
     }
@@ -74,6 +76,21 @@ public class BackroomsWorld {
                 roomX * BackroomsGenerator.PERIOD + 2.5,
                 BackroomsGenerator.FLOOR_Y + 1,
                 roomZ * BackroomsGenerator.PERIOD + 2.5);
+    }
+
+    /** Returns the zone level at the given world coordinates. */
+    public BackroomsGenerator.Level getLevelAt(int worldX, int worldZ) {
+        if (world == null || !levelsEnabled) return BackroomsGenerator.Level.HALLWAYS;
+        int roomX = Math.floorDiv(worldX, BackroomsGenerator.PERIOD);
+        int roomZ = Math.floorDiv(worldZ, BackroomsGenerator.PERIOD);
+        int zoneX = Math.floorDiv(roomX, BackroomsGenerator.ZONE_SIZE);
+        int zoneZ = Math.floorDiv(roomZ, BackroomsGenerator.ZONE_SIZE);
+        return BackroomsGenerator.zoneLevel(world.getSeed(), zoneX, zoneZ);
+    }
+
+    /** Returns the expected wall material at the given world coordinates. */
+    public Material getWallMaterialAt(int worldX, int worldZ) {
+        return BackroomsGenerator.wallFor(getLevelAt(worldX, worldZ));
     }
 
     // -------------------------------------------------------------------------
@@ -106,9 +123,9 @@ public class BackroomsWorld {
         // ---- Zone levels --------------------------------------------------------
         // Each zone (ZONE_SIZE × ZONE_SIZE rooms) picks one level via zoneLevel().
         // Level controls floor/wall/ceiling materials, lighting, and water floor.
-        private static final int ZONE_SIZE = 40; // rooms per zone side (= 480 blocks)
+        static final int ZONE_SIZE = 40; // rooms per zone side (= 480 blocks)
 
-        private enum Level { HALLWAYS, WAREHOUSE, POOLROOMS, OFFICE }
+        enum Level { HALLWAYS, WAREHOUSE, POOLROOMS, OFFICE }
 
         private static final int TYPE_STANDARD    = 0;
         private static final int TYPE_OPEN        = 1;
@@ -241,7 +258,7 @@ public class BackroomsWorld {
 
             } else if (wallX) {
                 int width     = doorWidth(seed, roomX, roomZ, 0);
-                int height    = doorHeight(seed, roomX, roomZ, 0);
+                int height    = doorHeight(seed, roomX, roomZ, 0, effectiveCeilY - FLOOR_Y);
                 int doorStart = doorwayStart(seed, roomX, roomZ, 0, width);
                 if (isWallOpen(seed, roomX, roomZ, 0) && modZ >= doorStart && modZ < doorStart + width) {
                     openPassage(chunk, lx, lz, height, effectiveCeilY, level);
@@ -251,7 +268,7 @@ public class BackroomsWorld {
 
             } else if (wallZ) {
                 int width     = doorWidth(seed, roomX, roomZ, 1);
-                int height    = doorHeight(seed, roomX, roomZ, 1);
+                int height    = doorHeight(seed, roomX, roomZ, 1, effectiveCeilY - FLOOR_Y);
                 int doorStart = doorwayStart(seed, roomX, roomZ, 1, width);
                 if (isWallOpen(seed, roomX, roomZ, 1) && modX >= doorStart && modX < doorStart + width) {
                     openPassage(chunk, lx, lz, height, effectiveCeilY, level);
@@ -281,12 +298,14 @@ public class BackroomsWorld {
                                           int ceilY, boolean inverted, boolean voidRoom, Level level) {
             boolean isWall = switch (type) {
                 case TYPE_STANDARD   -> isStandardPillar(seed, roomX, roomZ, modX, modZ);
-                case TYPE_OPEN       -> false;
-                case TYPE_COLUMN_ROW -> isColumnRowPillar(modX, modZ);
+                case TYPE_OPEN       -> isOpenStray(seed, roomX, roomZ, modX, modZ);
+                case TYPE_COLUMN_ROW -> isColumnRowPillar(seed, roomX, roomZ, modX, modZ);
                 case TYPE_CLUTTERED  -> isClutteredPillar(seed, roomX, roomZ, modX, modZ);
                 case TYPE_PARTITION  -> isPartitionWall(seed, roomX, roomZ, modX, modZ);
                 default              -> false;
             };
+            // Pit teleport lands at (2,2) — must always be walkable
+            if (isWall && modX == 2 && modZ == 2) isWall = false;
 
             if (isWall) {
                 solidWall(chunk, lx, lz, ceilY, level);
@@ -511,8 +530,8 @@ public class BackroomsWorld {
          * Maps a zone coordinate to one of the four levels.
          * Distribution: HALLWAYS 40% · WAREHOUSE 25% · POOLROOMS 20% · OFFICE 15%
          */
-        private Level zoneLevel(long seed, int zoneX, int zoneZ) {
-            long h = mix(seed ^ ((long) zoneX * 0x3a4b5c6d7e8f9a0bL)
+        static Level zoneLevel(long seed, int zoneX, int zoneZ) {
+            long h = mixStatic(seed ^ ((long) zoneX * 0x3a4b5c6d7e8f9a0bL)
                                ^ ((long) zoneZ * 0xb0a9f8e7d6c5b4a3L)
                                ^ 0x1f2e3d4c5b6a7980L);
             int v = (int) (h & 0xFF);
@@ -531,7 +550,7 @@ public class BackroomsWorld {
             };
         }
 
-        private Material wallFor(Level l) {
+        static Material wallFor(Level l) {
             return switch (l) {
                 case WAREHOUSE -> Material.STONE_BRICKS;
                 case POOLROOMS -> Material.WHITE_CONCRETE;
@@ -650,12 +669,24 @@ public class BackroomsWorld {
             return 5;              // ~10%
         }
 
-        /** Height in blocks: 2 (low header) or 3 (full). */
-        private int doorHeight(long worldSeed, int roomX, int roomZ, int dir) {
+        /**
+         * Door height in blocks, scaled to the wall height so passages feel
+         * proportional.  Low rooms always get cramped 2-block openings. Normal
+         * rooms keep the original 2-or-3 split.  Tall+ rooms get a uniform
+         * range — sometimes a tiny slit in a massive wall, sometimes a wide-open
+         * archway.  The mismatch is intentional: wrong-sized doors are unsettling.
+         *
+         * @param wallHeight effective wall height (effectiveCeilY - FLOOR_Y)
+         */
+        private int doorHeight(long worldSeed, int roomX, int roomZ, int dir, int wallHeight) {
             long h = mix(worldSeed ^ ((long) roomX * 0x2b3c4d5e6f7a8b9cL)
                                    ^ ((long) roomZ * 0x9a8b7c6d5e4f3021L)
                                    ^ ((long) dir   * 0xf1e2d3c4b5a69788L));
-            return (h & 0xFF) < 90 ? 2 : 3; // ~35% low header, ~65% full height
+            if (wallHeight <= 3) return 2;                          // low: always cramped
+            if (wallHeight <= 4) return (h & 0xFF) < 90 ? 2 : 3;   // normal: 35/65 split
+            // tall+: uniform over [3, min(wallHeight-1, 10)]
+            int maxH = Math.min(wallHeight - 1, 10);
+            return 3 + (int) ((h & 0x7FFF_FFFFL) % (maxH - 2));
         }
 
         /** 50% STANDARD · 18% OPEN · 12% COLUMN_ROW · 8% CLUTTERED · 5% PARTITION · 7% PIT */
@@ -712,44 +743,196 @@ public class BackroomsWorld {
 
         // ---- Room type: STANDARD ------------------------------------------------
 
+        /**
+         * Drifting grid with stray columns and occasional thick pillars.
+         *
+         * Base positions at (3,3), (3,9), (9,3), (9,9) each drift ±1 per room
+         * so the grid is recognisable but never quite the same twice. ~25% of
+         * positions actually have a pillar; ~15% of those extend into a 2-wide
+         * block.  ~12% of rooms also get a stray column at an unrelated position.
+         */
         private boolean isStandardPillar(long worldSeed, int roomX, int roomZ, int modX, int modZ) {
-            if (!((modX == 3 || modX == 9) && (modZ == 3 || modZ == 9))) return false;
-            long h = mix(worldSeed ^ ((long) roomX * 0xbf58476d1ce4e5b9L)
-                                   ^ ((long) roomZ * 0x94d049bb133111ebL)
-                                   ^ (modX * 17L) ^ (modZ * 31L));
-            return (h & 0xFF) < 64;
+            // Per-room drift hash — same for all four corners so the grid warps together
+            long dh = mix(worldSeed ^ ((long) roomX * 0xa1b2c3d4e5f60718L)
+                                    ^ ((long) roomZ * 0x18f6e5d4c3b2a190L));
+            int[][] bases = {{3, 3}, {3, 9}, {9, 3}, {9, 9}};
+
+            for (int i = 0; i < 4; i++) {
+                // ~25% chance this position has a pillar
+                long ph = mix(worldSeed ^ ((long) roomX * 0xbf58476d1ce4e5b9L)
+                                        ^ ((long) roomZ * 0x94d049bb133111ebL)
+                                        ^ (bases[i][0] * 17L) ^ (bases[i][1] * 31L));
+                if ((ph & 0xFF) >= 64) continue;
+
+                // Drift: 25% → -1, 50% → 0, 25% → +1 per axis
+                int rawX = (int) ((dh >>> (i * 4)) & 3);
+                int rawZ = (int) ((dh >>> (i * 4 + 2)) & 3);
+                int px = bases[i][0] + (rawX == 0 ? -1 : rawX == 3 ? 1 : 0);
+                int pz = bases[i][1] + (rawZ == 0 ? -1 : rawZ == 3 ? 1 : 0);
+                px = Math.max(2, Math.min(10, px));
+                pz = Math.max(2, Math.min(10, pz));
+
+                if (modX == px && modZ == pz) return true;
+
+                // ~15% of pillars are 2-wide (extends 1 block in a random direction)
+                if (((ph >>> 8) & 0xFF) < 38) {
+                    int ext = ((ph >>> 16) & 1) == 0 ? 1 : -1;
+                    boolean extX = ((ph >>> 17) & 1) != 0;
+                    if (extX  && modX == px + ext && modZ == pz) return true;
+                    if (!extX && modX == px && modZ == pz + ext) return true;
+                }
+            }
+
+            // Stray pillar: ~12% of rooms get one extra column at a random spot
+            long sh = mix(worldSeed ^ ((long) roomX * 0x1234abcd5678eL)
+                                    ^ ((long) roomZ * 0xfedcba987654L) ^ 0xcafebabeL);
+            if ((sh & 0xFF) < 31) {
+                int sx = 2 + (int) ((sh >>> 8) % 8);   // 2–9
+                int sz = 2 + (int) ((sh >>> 12) % 8);  // 2–9
+                if (modX == sx && modZ == sz) return true;
+            }
+
+            return false;
+        }
+
+        // ---- Room type: OPEN (with rare stray) ---------------------------------
+
+        /**
+         * ~10% of open rooms contain a single stray column — one pillar
+         * standing alone in an otherwise empty room.
+         */
+        private boolean isOpenStray(long worldSeed, int roomX, int roomZ, int modX, int modZ) {
+            long h = mix(worldSeed ^ ((long) roomX * 0x5c3a1b7e9d4f2068L)
+                                   ^ ((long) roomZ * 0x8602f4d9e7b1a3c5L)
+                                   ^ 0x0f1e2d3c4b5a6978L);
+            if ((h & 0xFF) >= 26) return false;  // ~10%
+            int sx = 3 + (int) ((h >>> 8) % 6);  // 3–8
+            int sz = 3 + (int) ((h >>> 12) % 6); // 3–8
+            return modX == sx && modZ == sz;
         }
 
         // ---- Room type: COLUMN_ROW ----------------------------------------------
 
-        private boolean isColumnRowPillar(int modX, int modZ) {
-            return modX == 6 && (modZ == 2 || modZ == 5 || modZ == 8);
+        /**
+         * Randomised column line. The axis, perpendicular position, column
+         * count (2–4), starting offset, and spacing all vary per room.
+         * Occasional columns extend into 2-wide blocks perpendicular to the row.
+         */
+        private boolean isColumnRowPillar(long worldSeed, int roomX, int roomZ, int modX, int modZ) {
+            long h = mix(worldSeed ^ ((long) roomX * 0x7a6c3b2d1e0f5a4bL)
+                                   ^ ((long) roomZ * 0x4b5a0f1e2d3b6c7aL));
+            boolean alongZ = (h & 1) != 0;
+            int rowPos  = 4 + (int) ((h >>> 1) % 5);  // 4–8
+            int count   = 2 + (int) ((h >>> 4) % 3);  // 2–4
+            int start   = 2 + (int) ((h >>> 6) % 3);  // 2–4
+            int spacing = 2 + (int) ((h >>> 8) & 1);  // 2–3
+
+            for (int i = 0; i < count; i++) {
+                int pos = start + i * spacing;
+                if (pos > 9) break;
+
+                int cx = alongZ ? rowPos : pos;
+                int cz = alongZ ? pos : rowPos;
+
+                if (modX == cx && modZ == cz) return true;
+
+                // ~16% thick: extend 1 block perpendicular to the row
+                long th = mix(h ^ ((long) i * 0x9e3779b9L));
+                if ((th & 0xFF) < 41) {
+                    int ext = (th & 0x100) != 0 ? 1 : -1;
+                    if (alongZ  && modX == cx + ext && modZ == cz) return true;
+                    if (!alongZ && modX == cx && modZ == cz + ext) return true;
+                }
+            }
+            return false;
         }
 
         // ---- Room type: CLUTTERED -----------------------------------------------
 
+        /**
+         * Irregular cluster of 5–8 pillars scattered around the room.
+         * Positions are hash-derived rather than grid-locked, creating
+         * organic arrangements.  ~20% of pillars extend into L-shapes
+         * or 2-wide blocks.  A 3×3 safety zone around the room centre
+         * is kept clear.
+         */
         private boolean isClutteredPillar(long worldSeed, int roomX, int roomZ, int modX, int modZ) {
-            if (!((modX == 3 || modX == 6 || modX == 9) && (modZ == 3 || modZ == 6 || modZ == 9))) return false;
-            if (modX == 6 && modZ == 6) return false; // keep center clear (spawn safety)
-            long h = mix(worldSeed ^ ((long) roomX * 0xbf58476d1ce4e5b9L)
-                                   ^ ((long) roomZ * 0x94d049bb133111ebL)
-                                   ^ (modX * 17L) ^ (modZ * 31L));
-            return (h & 0xFF) < 140;
+            long h = mix(worldSeed ^ ((long) roomX * 0xd3a2c1b0e9f87654L)
+                                   ^ ((long) roomZ * 0x456789feL));
+            int count = 5 + (int) ((h >>> 0) % 4);  // 5–8
+
+            for (int i = 0; i < count; i++) {
+                long ph = mix(h ^ ((long) i * 0x9e3779b97f4a7c15L));
+                int px = 2 + (int) ((ph & 0x7FFF_FFFFL) % 8);          // 2–9
+                int pz = 2 + (int) (((ph >>> 16) & 0x7FFF_FFFFL) % 8); // 2–9
+
+                // Keep centre clear
+                if (px >= 5 && px <= 7 && pz >= 5 && pz <= 7) continue;
+                // ~70% of candidates materialise
+                if (((ph >>> 32) & 0xFF) >= 179) continue;
+
+                if (modX == px && modZ == pz) return true;
+
+                // ~20% extend into L-shape or 2-wide block
+                if (((ph >>> 40) & 0xFF) < 51) {
+                    int shape = (int) ((ph >>> 48) & 3);
+                    switch (shape) {
+                        case 0 -> { if (modX == px + 1 && modZ == pz) return true; }
+                        case 1 -> { if (modX == px && modZ == pz + 1) return true; }
+                        case 2 -> { if (modX == px + 1 && modZ == pz + 1) return true; }
+                        case 3 -> { if (modX == px - 1 && modZ == pz) return true; }
+                    }
+                }
+            }
+            return false;
         }
 
         // ---- Room type: PARTITION -----------------------------------------------
 
+        /**
+         * Wall stubs and floating segments. The primary partition is a stub
+         * attached to one room wall. ~40% of partition rooms also get a
+         * secondary feature — either a second stub from the opposite wall
+         * or a freestanding wall segment floating mid-room, connected to
+         * nothing.
+         */
         private boolean isPartitionWall(long worldSeed, int roomX, int roomZ, int modX, int modZ) {
             long h = mix(worldSeed ^ ((long) roomX * 0x9e3779b97f4a7c15L)
                                    ^ ((long) roomZ * 0x6c62272e07bb0142L)
                                    ^ 0xdeadbeefL);
             int side = (int) (h & 3);
-            int len  = 4 + (int) ((h >>> 4) & 3);
+            int len  = 3 + (int) ((h >>> 2) & 3);  // 3–6
 
+            if (isStub(side, len, modX, modZ)) return true;
+
+            // ~40% chance of a secondary feature
+            if (((h >>> 4) & 0xFF) < 102) {
+                long h2 = mix(h ^ 0xdeadbeefcafebabeL);
+                boolean floating = (h2 & 1) != 0;
+
+                if (floating) {
+                    // Freestanding wall segment — not touching any wall
+                    boolean horiz = (h2 & 2) != 0;
+                    int pos   = 4 + (int) ((h2 >>> 2) % 4); // 4–7
+                    int start = 3 + (int) ((h2 >>> 5) % 4); // 3–6
+                    int flen  = 2 + (int) ((h2 >>> 8) & 1); // 2–3
+                    if (horiz) return modZ == pos && modX >= start && modX < start + flen;
+                    else       return modX == pos && modZ >= start && modZ < start + flen;
+                } else {
+                    // Second stub from opposite wall
+                    int side2 = (side + 2) & 3;
+                    int len2  = 2 + (int) ((h2 >>> 2) & 3); // 2–5
+                    return isStub(side2, len2, modX, modZ);
+                }
+            }
+            return false;
+        }
+
+        private boolean isStub(int side, int len, int modX, int modZ) {
             return switch (side) {
-                case 0 -> modX == 5 && modZ >= (PERIOD - 1 - len) && modZ <= PERIOD - 1;
+                case 0 -> modX == 5 && modZ >= (PERIOD - 1 - len) && modZ <= PERIOD - 2;
                 case 1 -> modX == 6 && modZ >= 1 && modZ <= len;
-                case 2 -> modZ == 5 && modX >= (PERIOD - 1 - len) && modX <= PERIOD - 1;
+                case 2 -> modZ == 5 && modX >= (PERIOD - 1 - len) && modX <= PERIOD - 2;
                 case 3 -> modZ == 6 && modX >= 1 && modX <= len;
                 default -> false;
             };
@@ -757,13 +940,17 @@ public class BackroomsWorld {
 
         // -------------------------------------------------------------------------
 
-        private long mix(long h) {
+        static long mixStatic(long h) {
             h ^= h >>> 30;
             h *= 0xbf58476d1ce4e5b9L;
             h ^= h >>> 27;
             h *= 0x94d049bb133111ebL;
             h ^= h >>> 31;
             return h;
+        }
+
+        private long mix(long h) {
+            return mixStatic(h);
         }
 
         @Override public boolean shouldGenerateNoise()       { return false; }

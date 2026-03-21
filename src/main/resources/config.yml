@@ -1,5 +1,10 @@
 # Fraction of wall segments that have a doorway opening (0.0–1.0).
 # Lower values create a denser, more maze-like layout.
+# Whether players keep their inventory on death inside the backrooms.
+# Recommended true — dying respawns you at a random location, making
+# dropped items effectively unrecoverable.
+keep-inventory: true
+
 wall-open-chance: 0.70
 
 escape-door:
@@ -57,7 +62,7 @@ long-fall-trigger:
 
 portal-trigger:
   # When true, each portal use has a random chance of sending the player
-  # to the backrooms instead of the nether/end. On by default.
-  enabled: true
+  # to the backrooms instead of the nether/end. Off by default.
+  enabled: false
   # Probability per portal use (0.0–1.0). Default 0.02 = 2% chance.
   chance: 0.02

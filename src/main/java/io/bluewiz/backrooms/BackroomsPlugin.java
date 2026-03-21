@@ -5,6 +5,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.GameRule;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -18,6 +19,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class BackroomsPlugin extends JavaPlugin {
 
     private BackroomsWorld backroomsWorld;
+    private BackroomsListener listener;
     private NamespacedKey returnLocationKey;
     private NamespacedKey previousGameModeKey;
     private boolean ambientSoundsEnabled;
@@ -54,8 +56,10 @@ public class BackroomsPlugin extends JavaPlugin {
         portalTriggerEnabled         = getConfig().getBoolean("portal-trigger.enabled", false);
         portalTriggerChance          = getConfig().getDouble("portal-trigger.chance", 0.10);
 
+        boolean keepInventory       = getConfig().getBoolean("keep-inventory", true);
+
         backroomsWorld = new BackroomsWorld(this, wallOpenChance, escapeEnabled, escapeRarity,
-                furnitureEnabled, furnitureChance, levelsEnabled);
+                furnitureEnabled, furnitureChance, levelsEnabled, keepInventory);
         backroomsWorld.ensureWorldExists();
 
         var cmd = getCommand("backrooms");
@@ -65,12 +69,11 @@ public class BackroomsPlugin extends JavaPlugin {
             cmd.setTabCompleter(handler);
         }
 
-        Bukkit.getPluginManager().registerEvents(
-                new BackroomsListener(this, backroomsWorld,
-                        noclipTriggerEnabled, noclipTriggerChance,
-                        longFallTriggerEnabled, longFallMinDamage, longFallTriggerChance,
-                        portalTriggerEnabled, portalTriggerChance),
-                this);
+        listener = new BackroomsListener(this, backroomsWorld,
+                noclipTriggerEnabled, noclipTriggerChance,
+                longFallTriggerEnabled, longFallMinDamage, longFallTriggerChance,
+                portalTriggerEnabled, portalTriggerChance);
+        Bukkit.getPluginManager().registerEvents(listener, this);
 
         Bukkit.getScheduler().runTaskTimer(this, this::tickAmbientSounds, 100L, 280L);
         // 300 ticks (15s) interval, 4% chance per player → avg ~6 min between messages
@@ -84,15 +87,68 @@ public class BackroomsPlugin extends JavaPlugin {
         getLogger().info("...or is there?");
     }
 
+    /**
+     * Reloads runtime configuration values (sounds, messages, triggers).
+     * Generation settings (wall density, escape doors, furniture, levels) only
+     * affect newly generated chunks and require a server restart to change.
+     */
+    public void reloadConfiguration() {
+        reloadConfig();
+        ambientSoundsEnabled    = getConfig().getBoolean("ambient-sounds.enabled", true);
+        paranoidMessagesEnabled = getConfig().getBoolean("paranoid-messages.enabled", true);
+        paranoidMessageChance   = getConfig().getDouble("paranoid-messages.chance", 0.04);
+        noclipTriggerEnabled    = getConfig().getBoolean("noclip-trigger.enabled", true);
+        noclipTriggerChance     = getConfig().getDouble("noclip-trigger.chance", 0.15);
+        longFallTriggerEnabled  = getConfig().getBoolean("long-fall-trigger.enabled", true);
+        longFallMinDamage       = getConfig().getDouble("long-fall-trigger.min-damage", 8.0);
+        longFallTriggerChance   = getConfig().getDouble("long-fall-trigger.chance", 0.25);
+        portalTriggerEnabled    = getConfig().getBoolean("portal-trigger.enabled", false);
+        portalTriggerChance     = getConfig().getDouble("portal-trigger.chance", 0.10);
+
+        listener.reloadConfig(noclipTriggerEnabled, noclipTriggerChance,
+                longFallTriggerEnabled, longFallMinDamage, longFallTriggerChance,
+                portalTriggerEnabled, portalTriggerChance);
+
+        // Update keep-inventory gamerule live
+        boolean keepInventory = getConfig().getBoolean("keep-inventory", true);
+        World world = backroomsWorld.getWorld();
+        if (world != null) {
+            world.setGameRule(GameRule.KEEP_INVENTORY, keepInventory);
+        }
+    }
+
     private void tickAmbientSounds() {
         if (!ambientSoundsEnabled) return;
         World world = backroomsWorld.getWorld();
         if (world == null) return;
         for (Player p : world.getPlayers()) {
-            // Entity-attached playSound follows the player, so volume is constant while moving.
-            p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.12f, 0.40f);
-            if (Math.random() < 0.25) {
-                p.playSound(p, Sound.AMBIENT_CAVE, 0.06f, 0.55f);
+            var level = backroomsWorld.getLevelAt(p.getLocation().getBlockX(), p.getLocation().getBlockZ());
+            switch (level) {
+                case POOLROOMS -> {
+                    p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.08f, 0.50f);
+                    p.playSound(p, Sound.BLOCK_WATER_AMBIENT, 0.10f, 1.0f);
+                    if (Math.random() < 0.15) {
+                        p.playSound(p, Sound.AMBIENT_CAVE, 0.04f, 0.65f);
+                    }
+                }
+                case WAREHOUSE -> {
+                    p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.15f, 0.30f);
+                    if (Math.random() < 0.20) {
+                        p.playSound(p, Sound.AMBIENT_CAVE, 0.08f, 0.45f);
+                    }
+                }
+                case OFFICE -> {
+                    p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.10f, 0.60f);
+                    if (Math.random() < 0.20) {
+                        p.playSound(p, Sound.AMBIENT_CAVE, 0.05f, 0.70f);
+                    }
+                }
+                default -> { // HALLWAYS
+                    p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.12f, 0.40f);
+                    if (Math.random() < 0.25) {
+                        p.playSound(p, Sound.AMBIENT_CAVE, 0.06f, 0.55f);
+                    }
+                }
             }
         }
     }

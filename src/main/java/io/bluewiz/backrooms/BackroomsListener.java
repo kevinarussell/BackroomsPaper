@@ -29,6 +29,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
@@ -46,13 +47,13 @@ public class BackroomsListener implements Listener {
 
     private final BackroomsPlugin plugin;
     private final BackroomsWorld  backroomsWorld;
-    private final boolean noclipTriggerEnabled;
-    private final double  noclipTriggerChance;
-    private final boolean longFallTriggerEnabled;
-    private final double  longFallMinDamage;
-    private final double  longFallTriggerChance;
-    private final boolean portalTriggerEnabled;
-    private final double  portalTriggerChance;
+    private boolean noclipTriggerEnabled;
+    private double  noclipTriggerChance;
+    private boolean longFallTriggerEnabled;
+    private double  longFallMinDamage;
+    private double  longFallTriggerChance;
+    private boolean portalTriggerEnabled;
+    private double  portalTriggerChance;
     // Guards against the move event firing twice before the teleport takes effect
     private final Set<UUID> fallingPlayers = new HashSet<>();
 
@@ -69,6 +70,19 @@ public class BackroomsListener implements Listener {
         this.longFallTriggerChance  = longFallTriggerChance;
         this.portalTriggerEnabled   = portalTriggerEnabled;
         this.portalTriggerChance    = portalTriggerChance;
+    }
+
+    /** Hot-reloads trigger settings without re-registering the listener. */
+    public void reloadConfig(boolean noclipEnabled, double noclipChance,
+                             boolean longFallEnabled, double longFallMinDmg, double longFallChance,
+                             boolean portalEnabled, double portalChance) {
+        this.noclipTriggerEnabled   = noclipEnabled;
+        this.noclipTriggerChance    = noclipChance;
+        this.longFallTriggerEnabled = longFallEnabled;
+        this.longFallMinDamage      = longFallMinDmg;
+        this.longFallTriggerChance  = longFallChance;
+        this.portalTriggerEnabled   = portalEnabled;
+        this.portalTriggerChance    = portalChance;
     }
 
     // -------------------------------------------------------------------------
@@ -110,6 +124,7 @@ public class BackroomsListener implements Listener {
     private void decorateRoom(World world, long seed, int roomX, int roomZ) {
         int period = BackroomsWorld.BackroomsGenerator.PERIOD;
         int floorY = BackroomsWorld.BackroomsGenerator.FLOOR_Y;
+        Material wallMat = backroomsWorld.getWallMaterialAt(roomX * period, roomZ * period);
 
         // ---- Painting -------------------------------------------------------
         long ph = mix(seed ^ ((long) roomX * 0xf1357aea2e62a9c5L)
@@ -129,7 +144,7 @@ public class BackroomsListener implements Listener {
                     northWall ? px : px - 1,
                     floorY + 2,
                     northWall ? pz - 1 : pz);
-            if (backing.getType() == Material.BAMBOO_PLANKS) {
+            if (backing.getType() == wallMat) {
                 try {
                     Location loc = new Location(world, px, floorY + 2, pz);
                     world.spawn(loc, Painting.class, p -> {
@@ -158,7 +173,7 @@ public class BackroomsListener implements Listener {
                     ? world.getBlockAt(sx, floorY + 2, sz - 1)
                     : world.getBlockAt(sx - 1, floorY + 2, sz);
             if (signBlock.getType() == Material.AIR
-                    && signBacking.getType() == Material.BAMBOO_PLANKS) {
+                    && signBacking.getType() == wallMat) {
                 WallSign data = (WallSign) Bukkit.createBlockData(Material.OAK_WALL_SIGN);
                 data.setFacing(face);
                 signBlock.setBlockData(data);
@@ -402,6 +417,12 @@ public class BackroomsListener implements Listener {
         if (ThreadLocalRandom.current().nextDouble() >= portalTriggerChance) return;
         e.setCancelled(true);
         plugin.sendToBackrooms(player);
+    }
+
+    /** Clean up falling-player guard if a player disconnects mid-fall. */
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent e) {
+        fallingPlayers.remove(e.getPlayer().getUniqueId());
     }
 
     /**
