@@ -117,7 +117,7 @@ public class BackroomsListener implements Listener {
 
     /**
      * Paintings (~12%) and signs (~5%) placed on the interior face of the west
-     * or north wall. Both are placed at modX=1 / modZ=1 so the bamboo wall
+     * or north wall. Both are placed at modX=1 / modZ=1 so the wall block
      * behind them is always solid — a block closer to the room boundary would
      * risk having open air behind it.
      */

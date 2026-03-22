@@ -562,7 +562,7 @@ public class BackroomsWorld {
                 case WAREHOUSE -> Material.STONE_BRICKS;
                 case POOLROOMS -> Material.WHITE_CONCRETE;
                 case OFFICE    -> Material.DARK_OAK_PLANKS;
-                default        -> Material.BAMBOO_PLANKS;
+                default        -> Material.STRIPPED_BAMBOO_BLOCK;
             };
         }
 

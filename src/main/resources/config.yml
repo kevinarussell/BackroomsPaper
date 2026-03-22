@@ -1,10 +1,10 @@
-# Fraction of wall segments that have a doorway opening (0.0–1.0).
-# Lower values create a denser, more maze-like layout.
 # Whether players keep their inventory on death inside the backrooms.
 # Recommended true — dying respawns you at a random location, making
 # dropped items effectively unrecoverable.
 keep-inventory: true
 
+# Fraction of wall segments that have a doorway opening (0.0–1.0).
+# Lower values create a denser, more maze-like layout.
 wall-open-chance: 0.70
 
 escape-door:
@@ -36,7 +36,7 @@ levels:
   # four level aesthetics. Zones cluster naturally from the hash — adjacent
   # zones often share the same level, creating distinct regions.
   #
-  #   Hallways  (40%) — classic yellow bamboo walls, horn coral floor
+  #   Hallways  (40%) — stripped bamboo walls, horn coral floor
   #   Warehouse (25%) — stone brick walls, smooth stone floor, lit lamps
   #   Poolrooms (20%) — white concrete, prismarine floor, ankle-deep water
   #   Office    (15%) — dark oak walls/floor, shroomlight ceiling panels

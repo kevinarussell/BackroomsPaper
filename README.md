@@ -26,7 +26,7 @@ The world is divided into 480-block zones, each assigned one of four aesthetics:
 
 | Level | Weight | Walls | Floor | Ceiling Lights |
 |---|---|---|---|---|
-| **Hallways** | 40% | Bamboo planks | Horn coral block | Ochre froglight (3% verdant) |
+| **Hallways** | 40% | Stripped bamboo block | Horn coral block | Ochre froglight (3% verdant) |
 | **Warehouse** | 25% | Stone bricks | Smooth stone | Lit redstone lamps |
 | **Poolrooms** | 20% | White concrete | Dark prismarine + water pools | Sea lanterns |
 | **Office** | 15% | Dark oak planks | Dark oak planks | Shroomlight |
