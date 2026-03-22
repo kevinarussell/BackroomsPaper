@@ -130,10 +130,13 @@ public class BackroomsPlugin extends JavaPlugin {
                         p.playSound(p, Sound.BLOCK_POINTED_DRIPSTONE_DRIP_WATER, 0.18f, 0.70f);
                     }
                     if (Math.random() < 0.25) {
-                        p.playSound(p, Sound.BLOCK_POINTED_DRIPSTONE_DRIP_WATER, 0.08f, 0.55f);
+                        p.playSound(p, Sound.BLOCK_POINTED_DRIPSTONE_DRIP_WATER_INTO_CAULDRON, 0.08f, 0.55f);
                     }
                     if (Math.random() < 0.15) {
                         p.playSound(p, Sound.AMBIENT_CAVE, 0.05f, 0.80f);
+                    }
+                    if (Math.random() < 0.08) {
+                        p.playSound(p, Sound.ENTITY_FISHING_BOBBER_SPLASH, 0.04f, 0.70f);
                     }
                 }
                 case WAREHOUSE -> {
@@ -141,11 +144,23 @@ public class BackroomsPlugin extends JavaPlugin {
                     if (Math.random() < 0.20) {
                         p.playSound(p, Sound.AMBIENT_CAVE, 0.08f, 0.45f);
                     }
+                    if (Math.random() < 0.10) {
+                        p.playSound(p, Sound.BLOCK_CHAIN_STEP, 0.06f, 0.60f);
+                    }
+                    if (Math.random() < 0.05) {
+                        p.playSound(p, Sound.BLOCK_IRON_DOOR_CLOSE, 0.03f, 0.40f);
+                    }
                 }
                 case OFFICE -> {
                     p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.10f, 0.60f);
                     if (Math.random() < 0.20) {
                         p.playSound(p, Sound.AMBIENT_CAVE, 0.05f, 0.70f);
+                    }
+                    if (Math.random() < 0.06) {
+                        p.playSound(p, Sound.BLOCK_WOODEN_PRESSURE_PLATE_CLICK_OFF, 0.03f, 0.50f);
+                    }
+                    if (Math.random() < 0.05) {
+                        p.playSound(p, Sound.BLOCK_REDSTONE_TORCH_BURNOUT, 0.03f, 0.70f);
                     }
                 }
                 default -> { // HALLWAYS

@@ -234,11 +234,15 @@ public class BackroomsWorld {
             // room is always fully enclosed on every side, not just north/west.
             // (North/west walls are owned by this room; east/south walls are owned by
             // the neighbour, so without the max they'd only reach the neighbour's height.)
+            // Compute adjacent room heights for wall/door sizing.
+            // effectiveCeilY (max) determines how tall the wall is.
+            // minCeilHeight  (min) caps door height so passages never overshoot
+            // the shorter room's ceiling.
+            int adjHeightX = wallX ? heightForMod(roomCeilingMod(seed, roomX - 1, roomZ)) : 0;
+            int adjHeightZ = wallZ ? heightForMod(roomCeilingMod(seed, roomX, roomZ - 1)) : 0;
             int effectiveCeilY = ceilY;
-            if (wallX) effectiveCeilY = Math.max(effectiveCeilY,
-                    FLOOR_Y + heightForMod(roomCeilingMod(seed, roomX - 1, roomZ)));
-            if (wallZ) effectiveCeilY = Math.max(effectiveCeilY,
-                    FLOOR_Y + heightForMod(roomCeilingMod(seed, roomX, roomZ - 1)));
+            if (wallX) effectiveCeilY = Math.max(effectiveCeilY, FLOOR_Y + adjHeightX);
+            if (wallZ) effectiveCeilY = Math.max(effectiveCeilY, FLOOR_Y + adjHeightZ);
 
             if (wallX || wallZ) {
                 // Solid wall: fills all the way to effectiveCeilY (no separate ceiling panel)
@@ -264,9 +268,10 @@ public class BackroomsWorld {
                 solidWall(chunk, lx, lz, effectiveCeilY, level);
 
             } else if (wallX) {
-                int width     = doorWidth(seed, roomX, roomZ, 0);
-                int height    = doorHeight(seed, roomX, roomZ, 0, effectiveCeilY - FLOOR_Y);
-                int doorStart = doorwayStart(seed, roomX, roomZ, 0, width);
+                int width         = doorWidth(seed, roomX, roomZ, 0);
+                int minCeilHeight = Math.min(ceilY - FLOOR_Y, adjHeightX);
+                int height        = doorHeight(seed, roomX, roomZ, 0, minCeilHeight);
+                int doorStart     = doorwayStart(seed, roomX, roomZ, 0, width);
                 if (isWallOpen(seed, roomX, roomZ, 0) && modZ >= doorStart && modZ < doorStart + width) {
                     openPassage(chunk, lx, lz, height, effectiveCeilY, level);
                 } else {
@@ -274,9 +279,10 @@ public class BackroomsWorld {
                 }
 
             } else if (wallZ) {
-                int width     = doorWidth(seed, roomX, roomZ, 1);
-                int height    = doorHeight(seed, roomX, roomZ, 1, effectiveCeilY - FLOOR_Y);
-                int doorStart = doorwayStart(seed, roomX, roomZ, 1, width);
+                int width         = doorWidth(seed, roomX, roomZ, 1);
+                int minCeilHeight = Math.min(ceilY - FLOOR_Y, adjHeightZ);
+                int height        = doorHeight(seed, roomX, roomZ, 1, minCeilHeight);
+                int doorStart     = doorwayStart(seed, roomX, roomZ, 1, width);
                 if (isWallOpen(seed, roomX, roomZ, 1) && modX >= doorStart && modX < doorStart + width) {
                     openPassage(chunk, lx, lz, height, effectiveCeilY, level);
                 } else {
@@ -319,12 +325,12 @@ public class BackroomsWorld {
             } else {
                 if (inverted) {
                     // Light moves to the floor; ceiling material already placed in placeColumn
-                    if (isLightTile(modX, modZ)) {
+                    if (isLightTile(modX, modZ, level)) {
                         setLightBlock(chunk, lx, FLOOR_Y, lz, level, seed, roomX, roomZ);
                     }
                 } else if (!voidRoom) {
                     // Normal: light overwrites the base ceiling panel at light-tile positions
-                    if (isLightTile(modX, modZ)) {
+                    if (isLightTile(modX, modZ, level)) {
                         setLightBlock(chunk, lx, ceilY, lz, level, seed, roomX, roomZ);
                     }
                 }
@@ -502,7 +508,7 @@ public class BackroomsWorld {
             }
 
             // All other interior positions — open air, normal lights
-            if (isLightTile(modX, modZ)) {
+            if (isLightTile(modX, modZ, level)) {
                 setLightBlock(chunk, lx, ceilY, lz, level, seed, roomX, roomZ);
             }
             for (int y = FLOOR_Y + 1; y < ceilY; y++) {
@@ -571,7 +577,7 @@ public class BackroomsWorld {
                 case WAREHOUSE -> Material.GRAY_CONCRETE;
                 case POOLROOMS -> Material.WHITE_CONCRETE;
                 case OFFICE    -> Material.BROWN_CONCRETE;
-                default        -> Material.YELLOW_CONCRETE;
+                default        -> Material.STRIPPED_BIRCH_LOG; // drop ceiling tile
             };
         }
 
@@ -645,7 +651,16 @@ public class BackroomsWorld {
             return (h & 0xFF) < 8 ? Material.VERDANT_FROGLIGHT : Material.OCHRE_FROGLIGHT;
         }
 
-        private boolean isLightTile(int modX, int modZ) {
+        /**
+         * Light panel positions. Hallways use four spaced-out 2×1 fluorescent
+         * strips (like a real drop ceiling grid). Other levels keep a centred
+         * 2×2 cluster.
+         */
+        private boolean isLightTile(int modX, int modZ, Level level) {
+            if (level == Level.HALLWAYS) {
+                // Four 2×1 panels in a grid: (3–4, 3), (3–4, 8), (7–8, 3), (7–8, 8)
+                return (modZ == 3 || modZ == 8) && (modX >= 3 && modX <= 4 || modX >= 7 && modX <= 8);
+            }
             return (modX == 5 || modX == 6) && (modZ == 5 || modZ == 6);
         }
 
