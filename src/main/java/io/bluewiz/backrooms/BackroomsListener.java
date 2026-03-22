@@ -304,13 +304,13 @@ public class BackroomsListener implements Listener {
     /** Suppress the death message and flag for backrooms respawn. */
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerDeath(PlayerDeathEvent e) {
-        if (!e.getEntity().getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
+        if (!plugin.hasReturnLocation(e.getEntity())) return;
         e.deathMessage(null);
         diedInBackrooms.add(e.getEntity().getUniqueId());
     }
 
     /** Dying in the backrooms respawns you in the backrooms. Dying is not an escape. */
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerRespawn(PlayerRespawnEvent e) {
         Player player = e.getPlayer();
         if (diedInBackrooms.remove(player.getUniqueId())) {

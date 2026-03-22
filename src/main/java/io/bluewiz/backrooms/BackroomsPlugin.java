@@ -271,6 +271,11 @@ public class BackroomsPlugin extends JavaPlugin {
         player.getPersistentDataContainer().set(returnLocationKey, PersistentDataType.STRING, encoded);
     }
 
+    /** Returns true if the player has a saved return location (i.e. is a backrooms player). */
+    public boolean hasReturnLocation(Player player) {
+        return player.getPersistentDataContainer().has(returnLocationKey, PersistentDataType.STRING);
+    }
+
     /**
      * Retrieves and removes the player's saved return location.
      * Falls back to overworld spawn if the stored location is missing or unparseable.
