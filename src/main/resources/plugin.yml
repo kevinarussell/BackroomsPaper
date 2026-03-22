@@ -9,7 +9,6 @@ commands:
   backrooms:
     description: "Send a player to the Backrooms. Good luck."
     usage: "/<command> [player|reload|leave|list]"
-    permission: backrooms.enter
     permission-message: "You are already in the Backrooms."
 
 permissions:

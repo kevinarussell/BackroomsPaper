@@ -36,6 +36,10 @@ public class BackroomsCommand implements CommandExecutor, TabCompleter {
 
         // No args — send yourself in
         if (sender instanceof Player p) {
+            if (!p.hasPermission("backrooms.enter")) {
+                p.sendMessage(Component.text("No permission.").color(NamedTextColor.RED));
+                return true;
+            }
             sendToBackrooms(p, sender);
         } else {
             sender.sendMessage("Usage: /backrooms <player|reload|leave|list>");
@@ -164,11 +168,13 @@ public class BackroomsCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> completions = new java.util.ArrayList<>(
-                    Bukkit.getOnlinePlayers().stream()
-                            .map(Player::getName)
-                            .filter(name -> name.toLowerCase().startsWith(args[0].toLowerCase()))
-                            .collect(Collectors.toList()));
+            List<String> completions = new java.util.ArrayList<>();
+            if (sender.hasPermission("backrooms.send")) {
+                Bukkit.getOnlinePlayers().stream()
+                        .map(Player::getName)
+                        .filter(name -> name.toLowerCase().startsWith(args[0].toLowerCase()))
+                        .forEach(completions::add);
+            }
             if (sender.hasPermission("backrooms.admin")) {
                 for (String sub : List.of("reload", "leave", "list")) {
                     if (sub.startsWith(args[0].toLowerCase())) {
