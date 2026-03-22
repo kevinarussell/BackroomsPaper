@@ -56,6 +56,8 @@ public class BackroomsListener implements Listener {
     private double  portalTriggerChance;
     // Guards against the move event firing twice before the teleport takes effect
     private final Set<UUID> fallingPlayers = new HashSet<>();
+    // Players who died inside the backrooms — consumed by the respawn handler
+    private final Set<UUID> diedInBackrooms = new HashSet<>();
 
     public BackroomsListener(BackroomsPlugin plugin, BackroomsWorld backroomsWorld,
                              boolean noclipTriggerEnabled, double noclipTriggerChance,
@@ -299,18 +301,19 @@ public class BackroomsListener implements Listener {
         }
     }
 
-    /** Suppress the death message — no one hears you die in here. */
+    /** Suppress the death message and flag for backrooms respawn. */
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerDeath(PlayerDeathEvent e) {
         if (!e.getEntity().getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) return;
         e.deathMessage(null);
+        diedInBackrooms.add(e.getEntity().getUniqueId());
     }
 
     /** Dying in the backrooms respawns you in the backrooms. Dying is not an escape. */
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerRespawn(PlayerRespawnEvent e) {
         Player player = e.getPlayer();
-        if (player.getWorld().getName().equals(BackroomsWorld.WORLD_NAME)) {
+        if (diedInBackrooms.remove(player.getUniqueId())) {
             e.setRespawnLocation(backroomsWorld.getSpawnLocation());
             // Gamemode is reset by the server after this event fires, so enforce
             // ADVENTURE one tick later once the player is fully respawned.
@@ -419,10 +422,12 @@ public class BackroomsListener implements Listener {
         plugin.sendToBackrooms(player);
     }
 
-    /** Clean up falling-player guard if a player disconnects mid-fall. */
+    /** Clean up state if a player disconnects. */
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent e) {
-        fallingPlayers.remove(e.getPlayer().getUniqueId());
+        UUID id = e.getPlayer().getUniqueId();
+        fallingPlayers.remove(id);
+        diedInBackrooms.remove(id);
     }
 
     /**
