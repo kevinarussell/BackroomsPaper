@@ -125,10 +125,15 @@ public class BackroomsPlugin extends JavaPlugin {
             var level = backroomsWorld.getLevelAt(p.getLocation().getBlockX(), p.getLocation().getBlockZ());
             switch (level) {
                 case POOLROOMS -> {
-                    p.playSound(p, Sound.BLOCK_BEACON_AMBIENT, 0.08f, 0.50f);
-                    p.playSound(p, Sound.BLOCK_WATER_AMBIENT, 0.10f, 1.0f);
+                    // Water drips echoing off tile — no fluorescent hum here
+                    if (Math.random() < 0.45) {
+                        p.playSound(p, Sound.BLOCK_POINTED_DRIPSTONE_DRIP_WATER, 0.18f, 0.70f);
+                    }
+                    if (Math.random() < 0.25) {
+                        p.playSound(p, Sound.BLOCK_POINTED_DRIPSTONE_DRIP_WATER, 0.08f, 0.55f);
+                    }
                     if (Math.random() < 0.15) {
-                        p.playSound(p, Sound.AMBIENT_CAVE, 0.04f, 0.65f);
+                        p.playSound(p, Sound.AMBIENT_CAVE, 0.05f, 0.80f);
                     }
                 }
                 case WAREHOUSE -> {

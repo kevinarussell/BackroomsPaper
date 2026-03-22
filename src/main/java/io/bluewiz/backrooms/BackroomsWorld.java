@@ -245,12 +245,19 @@ public class BackroomsWorld {
                 chunk.setBlock(lx, effectiveCeilY + 1, lz, Material.BEDROCK);
                 chunk.setBlock(lx, effectiveCeilY + 2, lz, Material.BEDROCK);
             } else {
-                // Interior: ceiling panel at ceilY, then seal
+                // Interior: ceiling panel at ceilY, then fill with wall material
+                // up to the tallest possible room height.  Without this, a short
+                // room next to a tall one would expose the seal layers through the
+                // doorway — visible black concrete and bedrock breaking the illusion.
                 if (!voidRoom) {
                     chunk.setBlock(lx, ceilY, lz, inverted ? floorFor(level) : ceilBaseFor(level));
                 }
-                chunk.setBlock(lx, ceilY + 1, lz, Material.BLACK_CONCRETE);
-                chunk.setBlock(lx, ceilY + 2, lz, Material.BEDROCK);
+                int fillCeil = FLOOR_Y + H_VOID;
+                for (int y = ceilY + 1; y <= fillCeil; y++) {
+                    chunk.setBlock(lx, y, lz, wallFor(level));
+                }
+                chunk.setBlock(lx, fillCeil + 1, lz, Material.BEDROCK);
+                chunk.setBlock(lx, fillCeil + 2, lz, Material.BEDROCK);
             }
 
             if (wallX && wallZ) {
